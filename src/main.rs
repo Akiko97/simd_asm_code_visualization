@@ -1,38 +1,20 @@
 // DO NOT REMOVE - hide console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use cpulib::{ CPU, Utilities, u256, u512, VecRegName, GPRName, FLAGSName, IPName };
-use egui_code_editor::{ CodeEditor, ColorTheme, Syntax };
+use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName, FLAGSName, IPName};
+use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use std::collections::HashMap;
-use eframe::{ App, Frame, NativeOptions };
-use eframe::egui::{ self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel };
+use eframe::{App, Frame, NativeOptions};
+use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel};
 
-enum ValueType {
-    U32, U64, U128, U256, U512, F32, F64
-}
-
-struct Element {
-    position: (f32, f32),
-    target_position: (f32, f32),
-    animating: bool,
-    value_type: ValueType,
-    value_u32: u32,
-    value_u64: u64,
-    value_u128: u128,
-    value_u256: u256,
-    value_u512: u512,
-    value_f32: f32,
-    value_f64: f64,
-}
+mod reg_visualizer;
+use reg_visualizer::{RegVisualizer, Value};
 
 struct APP {
     // CPU Emulator
     cpu: CPU,
-    using_vector_registers: Vec<VecRegName>,
-    using_gpr: Vec<GPRName>,
-    // Animation
-    elements: HashMap<String, Element>,
-    animation_speed: f32,
+    // Register
+    register_visualizer: RegVisualizer,
     // Code Editor
     code: String,
     highlight: usize,
@@ -41,6 +23,7 @@ struct APP {
     show_preference: bool,
     show_settings: bool,
     show_visualizer: bool,
+    show_memory: bool,
 }
 
 impl Default for APP {
@@ -48,11 +31,8 @@ impl Default for APP {
         Self {
             // CPU Emulator
             cpu: CPU::default(),
-            using_vector_registers: vec![],
-            using_gpr: vec![],
-            // Animation
-            elements: HashMap::new(),
-            animation_speed: 0.1f32,
+            // Register
+            register_visualizer: RegVisualizer::default(),
             // Code Editor
             code: "".into(),
             highlight: 0,
@@ -61,6 +41,7 @@ impl Default for APP {
             show_preference: false,
             show_settings: false,
             show_visualizer: false,
+            show_memory: false,
         }
     }
 }
@@ -69,6 +50,10 @@ impl App for APP {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
+                if ui.button("Visualizer").triple_clicked() {
+                    todo!()
+                }
+                ui.add_space(20.0);
                 egui::menu::menu_button(ui, "File", |ui| {
                     if ui.button("Open..").clicked() {
                         todo!()
@@ -105,6 +90,22 @@ impl App for APP {
                     if ui.button("Visualizer").clicked() {
                         self.show_visualizer = true;
                     }
+                    if ui.button("Memory").clicked() {
+                        self.show_memory = true;
+                    }
+                    ui.label("Debug Options:");
+                    if ui.button("Settings").clicked() {
+                        //
+                    }
+                    if ui.button("Run").clicked() {
+                        //
+                    }
+                    if ui.button("Step").clicked() {
+                        //
+                    }
+                    if ui.button("Undo").clicked() {
+                        //
+                    }
                 });
             });
         }
@@ -136,15 +137,37 @@ impl App for APP {
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
             .open(&mut self.show_visualizer)
             .show(ctx, |ui| {
-                ui.label("Visualizer");
+                if ui.button("add").clicked() {
+                    self.register_visualizer.insert_vector(VecRegName::XMM, 0, vec![
+                        Value::U32(0), Value::U32(0), Value::U32(0), Value::U32(0),
+                    ]);
+                }
+                if ui.button("remove").clicked() {
+                    self.register_visualizer.remove_vector(VecRegName::XMM, 0);
+                }
+                let delta_time = ctx.input(|input|{
+                    input.unstable_dt
+                });
+                self.register_visualizer.update(delta_time);
+                self.register_visualizer.show(ui);
+                if self.register_visualizer.is_animating() {
+                    ctx.request_repaint();
+                }
+            });
+        Window::new("Memory")
+            .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
+            .open(&mut self.show_memory)
+            .show(ctx, |ui| {
+                ui.label("Memory");
             });
     }
 }
 
 fn main() -> Result<(), eframe::Error> {
     let mut options = NativeOptions::default();
+    options.initial_window_size = Some(Vec2::new(1200f32, 800f32));
     eframe::run_native(
-        "SIMD Assembly Code Visualization",
+        "SIMD Assembly Code Visualization Tool",
         options,
         Box::new(|_cc| Box::new(APP::default())),
     )
