@@ -240,7 +240,7 @@ impl Element {
         let galley = ui.painter().layout_no_wrap(
             format!("{}", self.value),
             egui::FontId::new(20f32, egui::FontFamily::Monospace),
-            egui::Color32::BLACK,
+            Color32::BLACK,
         );
         let text_pos = self.position + get_size_from_value(&self.value) / 2.0 - galley.size() / 2.0;
         ui.painter().galley(text_pos, galley);
@@ -344,14 +344,6 @@ impl RegVisualizer {
                                 .with_position(layout_rect.min)
                                 .with_color(get_color(&reg_name))
                                 .with_border_color(get_border_color(&reg_name)));
-                            // FOR DEBUG
-                            if ui.is_rect_visible(layout_rect) {
-                                ui.painter().rect_filled(layout_rect, 0.0, Color32::LIGHT_BLUE);
-                                let galley = ui.painter().layout_no_wrap("9".into(), egui::FontId::new(20f32, egui::FontFamily::Monospace), egui::Color32::BLACK);
-                                let text_pos = layout_rect.center() - galley.size() / 2.0;
-                                ui.painter().galley(text_pos, galley);
-                            }
-                            // END
                         });
                         self.elements.insert(reg_name, element_vec);
                     });
@@ -363,21 +355,14 @@ impl RegVisualizer {
                     ui.label(reg_name.clone());
                     ui.horizontal(|ui| {
                         let size = get_size_from_value(value);
-                        let mut element_vec = vec![];
                         let (layout_rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
-                        element_vec.push(Element::default()
-                            .with_value(value.clone())
-                            .with_position(layout_rect.min)
-                            .with_color(get_color(&reg_name))
-                            .with_border_color(get_border_color(&reg_name)));
-                        // FOR DEBUG
-                        if ui.is_rect_visible(layout_rect) {
-                            ui.painter().rect_filled(layout_rect, 0.0, Color32::LIGHT_BLUE);
-                            let galley = ui.painter().layout_no_wrap("9".into(), egui::FontId::new(20f32, egui::FontFamily::Monospace), egui::Color32::BLACK);
-                            let text_pos = layout_rect.center() - galley.size() / 2.0;
-                            ui.painter().galley(text_pos, galley);
-                        }
-                        // END
+                        let element_vec = vec![
+                            Element::default()
+                                .with_value(value.clone())
+                                .with_position(layout_rect.min)
+                                .with_color(get_color(&reg_name))
+                                .with_border_color(get_border_color(&reg_name))
+                        ];
                         self.elements.insert(reg_name, element_vec);
                     });
                 });
