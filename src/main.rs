@@ -142,10 +142,14 @@ impl App for APP {
                         Value::U32(0), Value::U32(0), Value::U32(0), Value::U32(0),
                     ]);
                     self.register_visualizer.insert_gpr(GPRName::RAX, Value::U64(0));
+                    self.register_visualizer.insert_vector(VecRegName::ZMM, 0, vec![
+                        Value::U512(u512::max_value())
+                    ]);
                 }
                 if ui.button("remove").clicked() {
                     self.register_visualizer.remove_vector(VecRegName::XMM, 0);
                     self.register_visualizer.remove_gpr(GPRName::RAX);
+                    self.register_visualizer.remove_vector(VecRegName::ZMM, 0);
                 }
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt
