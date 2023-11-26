@@ -361,6 +361,7 @@ impl RegVisualizer {
                 if let Some(values) = self.registers.get(reg_name) {
                     ui.vertical(|ui| {
                         ui.label(reg_name.clone());
+                        ui.spacing_mut().item_spacing.x = 0.0;
                         ui.horizontal(|ui| {
                             let size = get_size_from_value(&values[0]);
                             let mut element_vec = vec![];
