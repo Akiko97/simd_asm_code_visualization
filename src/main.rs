@@ -151,6 +151,7 @@ impl App for APP {
                     self.register_visualizer.remove_vector(VecRegName::XMM, 0);
                     self.register_visualizer.remove_gpr(GPRName::RAX);
                     self.register_visualizer.remove_vector(VecRegName::ZMM, 0);
+                    self.register_visualizer.remove_gpr(GPRName::AH);
                 }
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt

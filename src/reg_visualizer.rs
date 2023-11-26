@@ -282,8 +282,8 @@ impl Element {
 
 pub struct RegVisualizer {
     // Visualization Data
-    vector_registers: HashMap<(VecRegName, usize), Vec<Value>>,
-    gprs: HashMap<GPRName, Value>,
+    registers: HashMap<String, Vec<Value>>,
+    order: Vec<String>,
     // Visualization Data
     elements: HashMap<String, Vec<Element>>,
     // Animation
@@ -294,8 +294,8 @@ impl Default for RegVisualizer {
     fn default() -> Self {
         Self {
             // Layout Data
-            vector_registers: HashMap::new(),
-            gprs: HashMap::new(),
+            registers: HashMap::new(),
+            order: vec![],
             // Visualization Data
             elements: HashMap::new(),
             // Animation
@@ -306,24 +306,32 @@ impl Default for RegVisualizer {
 
 impl RegVisualizer {
     pub fn insert_vector(&mut self, reg: VecRegName, reg_index: usize, values: Vec<Value>) {
-        self.vector_registers.insert((reg, reg_index), values);
+        let reg_name = get_vec_reg_name(&reg, &reg_index);
+        self.registers.insert(reg_name.clone(), values);
+        self.order.push(reg_name);
     }
     pub fn remove_vector(&mut self, reg: VecRegName, reg_index: usize) {
-        // Remove elements
         let reg_name = get_vec_reg_name(&reg, &reg_index);
+        // Remove registers
+        self.registers.remove(&reg_name);
+        // Remove elements
         self.elements.remove(&reg_name);
-        // Remove vector
-        self.vector_registers.remove(&(reg, reg_index));
+        // Remove Order
+        self.order.retain(|item| *item != reg_name);
     }
     pub fn insert_gpr(&mut self, reg: GPRName, value: Value) {
-        self.gprs.insert(reg, value);
+        let reg_name = get_gpr_name(&reg);
+        self.registers.insert(reg_name.clone(), vec![value]);
+        self.order.push(reg_name);
     }
     pub fn remove_gpr(&mut self, reg: GPRName) {
-        // Remove elements
         let reg_name = get_gpr_name(&reg);
+        // Remove registers
+        self.registers.remove(&reg_name);
+        // Remove elements
         self.elements.remove(&reg_name);
-        // Remove gpr
-        self.gprs.remove(&reg);
+        // Remove Order
+        self.order.retain(|item| *item != reg_name);
     }
 }
 
@@ -349,43 +357,26 @@ impl RegVisualizer {
     }
     pub fn show(&mut self, ui: &mut Ui) {
         ui.vertical(|ui| {
-            for ((reg, reg_index), values) in &self.vector_registers {
-                let reg_name = get_vec_reg_name(reg, reg_index);
-                ui.vertical(|ui| {
-                    ui.label(reg_name.clone());
-                    ui.horizontal(|ui| {
-                        let size = get_size_from_value(&values[0]);
-                        let mut element_vec = vec![];
-                        values.iter().for_each(|value| {
-                            let (layout_rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
-                            element_vec.push(Element::default()
-                                .with_value(value.clone())
-                                .with_position(layout_rect.min)
-                                .with_color(get_color(&reg_name))
-                                .with_border_color(get_border_color(&reg_name)));
+            self.order.iter().for_each(|reg_name| {
+                if let Some(values) = self.registers.get(reg_name) {
+                    ui.vertical(|ui| {
+                        ui.label(reg_name.clone());
+                        ui.horizontal(|ui| {
+                            let size = get_size_from_value(&values[0]);
+                            let mut element_vec = vec![];
+                            values.iter().for_each(|value| {
+                                let (layout_rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
+                                element_vec.push(Element::default()
+                                    .with_value(value.clone())
+                                    .with_position(layout_rect.min)
+                                    .with_color(get_color(&reg_name))
+                                    .with_border_color(get_border_color(&reg_name)));
+                            });
+                            self.elements.insert(reg_name.clone(), element_vec);
                         });
-                        self.elements.insert(reg_name, element_vec);
                     });
-                });
-            }
-            for (reg, value) in &self.gprs {
-                let reg_name = get_gpr_name(reg);
-                ui.vertical(|ui| {
-                    ui.label(reg_name.clone());
-                    ui.horizontal(|ui| {
-                        let size = get_size_from_value(value);
-                        let (layout_rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
-                        let element_vec = vec![
-                            Element::default()
-                                .with_value(value.clone())
-                                .with_position(layout_rect.min)
-                                .with_color(get_color(&reg_name))
-                                .with_border_color(get_border_color(&reg_name))
-                        ];
-                        self.elements.insert(reg_name, element_vec);
-                    });
-                });
-            }
+                }
+            });
         });
         // Show every elements
         self.elements.iter().for_each(|(_, vec)| {
