@@ -34,15 +34,15 @@ impl Display for Value {
 
 fn get_size_from_value(value: &Value) -> Vec2 {
     match value {
-        Value::U8(_) => {Vec2::new(20.0, 25.0)}
-        Value::U16(_) => {Vec2::new(40.0, 25.0)}
-        Value::U32(_) => {Vec2::new(80.0, 25.0)}
-        Value::U64(_) => {Vec2::new(160.0, 25.0)}
-        Value::U128(_) => {Vec2::new(320.0, 25.0)}
-        Value::U256(_) => {Vec2::new(640.0, 25.0)}
-        Value::U512(_) => {Vec2::new(1280.0, 25.0)}
-        Value::F32(_) => {Vec2::new(80.0, 25.0)}
-        Value::F64(_) => {Vec2::new(160.0, 25.0)}
+        Value::U8(_) => {Vec2::new(15.0, 25.0)}
+        Value::U16(_) => {Vec2::new(30.0, 25.0)}
+        Value::U32(_) => {Vec2::new(60.0, 25.0)}
+        Value::U64(_) => {Vec2::new(120.0, 25.0)}
+        Value::U128(_) => {Vec2::new(240.0, 25.0)}
+        Value::U256(_) => {Vec2::new(480.0, 25.0)}
+        Value::U512(_) => {Vec2::new(920.0, 25.0)}
+        Value::F32(_) => {Vec2::new(60.0, 25.0)}
+        Value::F64(_) => {Vec2::new(120.0, 25.0)}
     }
 }
 
@@ -224,25 +224,44 @@ impl Element {
 
 impl Element {
     fn show(&self, ui: &mut Ui) {
-        // Rectangle
+        let rect_size = get_size_from_value(&self.value);
+        // Display Rectangle
         ui.painter().rect_filled(
-            egui::Rect::from_min_size(self.position, get_size_from_value(&self.value)),
+            egui::Rect::from_min_size(self.position, rect_size),
             0.0,
             self.color,
         );
-        // Border
+        // Display Border
         ui.painter().rect_stroke(
-            egui::Rect::from_min_size(self.position, get_size_from_value(&self.value)),
+            egui::Rect::from_min_size(self.position, rect_size),
             0.0,
             egui::Stroke::new(2.0, self.border_color),
         );
-        // Text(Value)
+        // Adaptive Text Size
+        let mut font_size = 20f32;
+        let mut text_size;
+        loop {
+            let galley = ui.painter().layout_no_wrap(
+                format!("{}", self.value),
+                egui::FontId::new(font_size, egui::FontFamily::Monospace),
+                Color32::BLACK,
+            );
+            text_size = galley.size().x;
+            if text_size < rect_size.x - 4.0 { // Subtract a small margin
+                break;
+            }
+            font_size -= 1.0;
+            if font_size <= 1.0 { // Minimum font size
+                break;
+            }
+        }
+        // Display Text
+        let text_pos = self.position + rect_size / 2.0 - Vec2::new(text_size / 2.0, font_size / 2.0);
         let galley = ui.painter().layout_no_wrap(
             format!("{}", self.value),
-            egui::FontId::new(20f32, egui::FontFamily::Monospace),
+            egui::FontId::new(font_size, egui::FontFamily::Monospace),
             Color32::BLACK,
         );
-        let text_pos = self.position + get_size_from_value(&self.value) / 2.0 - galley.size() / 2.0;
         ui.painter().galley(text_pos, galley);
     }
     fn update(&mut self, delta_time: f32, velocity: Vec2) {

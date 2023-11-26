@@ -145,6 +145,7 @@ impl App for APP {
                     self.register_visualizer.insert_vector(VecRegName::ZMM, 0, vec![
                         Value::U512(u512::max_value())
                     ]);
+                    self.register_visualizer.insert_gpr(GPRName::AH, Value::U8(255));
                 }
                 if ui.button("remove").clicked() {
                     self.register_visualizer.remove_vector(VecRegName::XMM, 0);
