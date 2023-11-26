@@ -172,8 +172,10 @@ impl App for APP {
 }
 
 fn main() -> Result<(), eframe::Error> {
-    let mut options = NativeOptions::default();
-    options.initial_window_size = Some(Vec2::new(1200f32, 800f32));
+    let options = NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_inner_size([1200f32, 800f32]),
+        ..Default::default()
+    };
     eframe::run_native(
         "SIMD Assembly Code Visualization Tool",
         options,

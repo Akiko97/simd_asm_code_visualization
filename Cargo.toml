@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-eframe = { version = "0.23", features = [] }
+eframe = { version = "0.24", features = [] }
 cpulib = { path = "libs/cpulib" }
 egui_code_editor = { path = "libs/egui_code_editor" }

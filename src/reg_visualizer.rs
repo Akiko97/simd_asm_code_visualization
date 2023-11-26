@@ -152,19 +152,19 @@ fn get_color(reg: &String) -> Color32 {
 fn get_border_color(reg: &String) -> Color32 {
     match reg.as_str() {
         "XMM0" | "XMM1" | "XMM2" | "XMM3" | "XMM4" | "XMM5" | "XMM6" |"XMM7" | "XMM8" | "XMM9" |
-        "XMM10" | "XMM11" | "XMM12" | "XMM13" | "XMM14" | "XMM15" => Color32::from_rgb(0, 0, 0),
+        "XMM10" | "XMM11" | "XMM12" | "XMM13" | "XMM14" | "XMM15" => Color32::from_rgb(128, 128, 128),
         "YMM0" | "YMM1" | "YMM2" | "YMM3" | "YMM4" | "YMM5" | "YMM6" | "YMM7" | "YMM8" | "YMM9" |
-        "YMM10" | "YMM11" | "YMM12" | "YMM13" | "YMM14" | "YMM15" => Color32::from_rgb(0, 0, 0),
+        "YMM10" | "YMM11" | "YMM12" | "YMM13" | "YMM14" | "YMM15" => Color32::from_rgb(128, 128, 128),
         "ZMM0" | "ZMM1" | "ZMM2" | "ZMM3" | "ZMM4" | "ZMM5" | "ZMM6" | "ZMM7" | "ZMM8" | "ZMM9" |
-        "ZMM10" | "ZMM11" | "ZMM12" | "ZMM13" | "ZMM14" | "ZMM15" => Color32::from_rgb(0, 0, 0),
+        "ZMM10" | "ZMM11" | "ZMM12" | "ZMM13" | "ZMM14" | "ZMM15" => Color32::from_rgb(128, 128, 128),
         "RAX" | "RBX" | "RCX" | "RDX" | "RSI" | "RDI" | "RBP" | "RSP" | "R8" | "R9" | "R10" |
-        "R11" |"R12" | "R13" | "R14" | "R15" => Color32::from_rgb(0, 0, 0),
+        "R11" |"R12" | "R13" | "R14" | "R15" => Color32::from_rgb(128, 128, 128),
         "EAX" | "EBX" | "ECX" | "EDX" | "ESI" | "EDI" | "EBP" | "ESP" | "R8D" | "R9D" | "R10D" |
-        "R11D" | "R12D" | "R13D" | "R14D" | "R15D" => Color32::from_rgb(0, 0, 0),
+        "R11D" | "R12D" | "R13D" | "R14D" | "R15D" => Color32::from_rgb(128, 128, 128),
         "AX" | "BX" | "CX" | "DX" | "SI" | "DI" | "BP" | "SP" | "R8W" | "R9W" | "R10W" | "R11W" |
-        "R12W" | "R13W" | "R14W" | "R15W" => Color32::from_rgb(0, 0, 0),
+        "R12W" | "R13W" | "R14W" | "R15W" => Color32::from_rgb(128, 128, 128),
         "AH" | "BH" | "CH" | "DH" | "AL" | "BL" | "CL" | "DL" | "SIL" | "DIL" | "BPL" | "SPL" |"R8B" |
-        "R9B" | "R10B" | "R11B" | "R12B" | "R13B" | "R14B" | "R15B" => Color32::from_rgb(0, 0, 0),
+        "R9B" | "R10B" | "R11B" | "R12B" | "R13B" | "R14B" | "R15B" => Color32::from_rgb(128, 128, 128),
         _ => Color32::TRANSPARENT,
     }
 }
@@ -264,7 +264,7 @@ impl Element {
         );
         ui.painter().galley(text_pos, galley);
     }
-    fn update(&mut self, delta_time: f32, velocity: Vec2) {
+    fn update(&mut self, delta_time: f32, velocity: f32) {
         let direction = self.target_position - self.position;
         if direction.length() > 1.0 {
             self.animating = true;
@@ -351,7 +351,7 @@ impl RegVisualizer {
     pub fn update(&mut self, delta_time: f32) {
         self.elements.iter_mut().for_each(|(_, vec)| {
             vec.iter_mut().for_each(|element| {
-                element.update(delta_time, Vec2::new(self.velocity, self.velocity));
+                element.update(delta_time, self.velocity);
             });
         });
     }
