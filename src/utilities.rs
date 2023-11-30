@@ -2,7 +2,7 @@ use super::*;
 use std::fmt::{Display, Formatter};
 use cpulib::{VecRegName, GPRName, u256, u512};
 
-#[derive(Clone, Copy)]
+#[derive(Copy, Clone)]
 pub enum Value {
     U8(u8),
     U16(u16),
@@ -123,5 +123,84 @@ pub fn get_gpr_name(reg: &GPRName) -> String {
         GPRName::R13B => String::from("R13B"),
         GPRName::R14B => String::from("R14B"),
         GPRName::R15B => String::from("R15B"),
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub enum RegType {
+    GPR, Vector, None
+}
+
+#[derive(Copy, Clone)]
+pub struct Register {
+    reg_type: RegType,
+    gpr: GPRName,
+    vector: (VecRegName, usize),
+}
+
+impl Display for Register {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self.reg_type {
+            RegType::GPR => format!("{}", self.gpr),
+            RegType::Vector => format!("{}{}", self.vector.0, self.vector.1),
+            RegType::None => "None".into(),
+        })
+    }
+}
+
+impl PartialEq<Self> for Register {
+    fn eq(&self, other: &Self) -> bool {
+        self.reg_type == other.reg_type && match self.reg_type {
+            RegType::GPR => self.gpr == other.gpr,
+            RegType::Vector => self.vector == other.vector,
+            RegType::None => false,
+        }
+    }
+    fn ne(&self, other: &Self) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl PartialEq<GPRName> for Register {
+    fn eq(&self, other: &GPRName) -> bool {
+        self.reg_type == RegType::GPR && self.gpr == *other
+    }
+    fn ne(&self, other: &GPRName) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl PartialEq<(VecRegName, usize)> for Register {
+    fn eq(&self, other: &(VecRegName, usize)) -> bool {
+        self.reg_type == RegType::Vector && self.vector == *other
+    }
+    fn ne(&self, other: &(VecRegName, usize)) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl Eq for Register {}
+
+impl Register {
+    pub fn none() -> Self {
+        Self {
+            reg_type: RegType::None,
+            gpr: GPRName::RAX,
+            vector: (VecRegName::XMM, 0),
+        }
+    }
+    pub fn vector(name: VecRegName, index: usize) -> Self {
+        Self {
+            reg_type: RegType::Vector,
+            gpr: GPRName::RAX,
+            vector: (name, index),
+        }
+    }
+    pub fn gpr(name: GPRName) -> Self {
+        Self {
+            reg_type: RegType::GPR,
+            gpr: name,
+            vector: (VecRegName::XMM, 0),
+        }
     }
 }

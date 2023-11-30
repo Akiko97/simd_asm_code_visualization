@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::thread::sleep;
 use eframe::{App, Frame, NativeOptions};
 use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel, Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Shape, Rect, epaint, Label, Slider, ComboBox, Color32};
+use std::sync::{Arc, RwLock};
 mod reg_visualizer;
 mod visualizer_setting;
 mod utilities;
@@ -15,9 +16,30 @@ use reg_visualizer::{RegVisualizer};
 use visualizer_setting::{VisualizerSetting};
 use utilities::*;
 
+struct RegVisualizerData {
+    // Registers Data
+    registers: Vec<Vec<Register>>,
+    vector_regs_size: HashMap<(VecRegName, usize), usize>,
+    // Animation Data
+    velocity: f32,
+}
+
+impl Default for RegVisualizerData {
+    fn default() -> Self {
+        Self {
+            // Registers Data
+            registers: vec![vec![]],
+            vector_regs_size: HashMap::new(),
+            // Animation Data
+            velocity: 10f32,
+        }
+    }
+}
+
 struct APP {
-    // CPU Emulator
+    // Data
     cpu: CPU,
+    reg_visualizer_data: RegVisualizerData,
     // Windows
     register_visualizer: RegVisualizer,
     visualizer_setting: VisualizerSetting,
@@ -35,8 +57,9 @@ struct APP {
 impl Default for APP {
     fn default() -> Self {
         Self {
-            // CPU Emulator
+            // Data
             cpu: CPU::default(),
+            reg_visualizer_data: RegVisualizerData::default(),
             // Windows
             register_visualizer: RegVisualizer::default(),
             visualizer_setting: VisualizerSetting::default(),
@@ -138,7 +161,7 @@ impl App for APP {
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
             .open(&mut self.show_settings)
             .show(ctx, |ui| {
-                self.visualizer_setting.show(ui);
+                self.visualizer_setting.show(ui, &mut self.reg_visualizer_data);
             });
         Window::new("Visualizer")
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))

@@ -2,11 +2,6 @@ use eframe::egui::{Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Vec
 use cpulib::{VecRegName, GPRName};
 use super::*;
 
-#[derive(PartialEq)]
-enum RegType {
-    GPR, Vector
-}
-
 fn drag_source(ui: &mut Ui, id: Id, body: impl FnOnce(&mut Ui)) {
     let is_being_dragged = ui.memory(|mem| mem.is_being_dragged(id));
 
@@ -78,7 +73,6 @@ fn drop_target<R>(
 }
 
 pub struct VisualizerSetting {
-    registers: Vec<Vec<String>>,
     velocity: f32,
     reg_type: RegType,
     gpr_name: GPRName,
@@ -90,10 +84,7 @@ pub struct VisualizerSetting {
 impl Default for VisualizerSetting {
     fn default() -> Self {
         Self {
-            registers: vec![
-                vec![],
-            ],
-            velocity: 10f32,
+            velocity: 0f32,
             reg_type: RegType::Vector,
             gpr_name: GPRName::RAX,
             vec_name: VecRegName::YMM,
@@ -104,7 +95,10 @@ impl Default for VisualizerSetting {
 }
 
 impl VisualizerSetting {
-    pub fn show(&mut self, ui: &mut Ui) {
+    pub fn show(&mut self, ui: &mut Ui, data: &mut RegVisualizerData) {
+        // init
+        self.velocity = data.velocity;
+        // UI
         ui.label("Setting Velocity:");
         let slider_response = ui.add(
             Slider::new(&mut self.velocity, 10.0..=100.0)
@@ -112,7 +106,7 @@ impl VisualizerSetting {
                 .text("Velocity"),
         );
         if slider_response.changed() {
-            //
+            data.velocity = self.velocity;
         }
 
         ui.label("Setting Registers:");
@@ -166,16 +160,36 @@ impl VisualizerSetting {
                     ui.label("Bits");
                 });
             }
+            _ => {/*None: Do nothing, there is NO possible to run into here!*/}
         }
         ui.horizontal(|ui| {
-            if ui.button("Load").clicked() {
-                //
-            };
-            if ui.button("Add/Edit").clicked() {
-                //
+            if ui.button("Add/Update").clicked() {
+                match self.reg_type {
+                    RegType::GPR => {
+                        if !data.registers[0].iter().any(|r| *r == self.gpr_name) {
+                            data.registers[0].push(Register::gpr(self.gpr_name));
+                        }
+                    }
+                    RegType::Vector => {
+                        if !data.registers[0].iter().any(|r| *r == (self.vec_name, self.vec_index)) {
+                            data.registers[0].push(Register::vector(self.vec_name, self.vec_index));
+                        }
+                        data.vector_regs_size.insert((self.vec_name, self.vec_index), self.data_size);
+                    }
+                    _ => {/*None: Do nothing, there is NO possible to run into here!*/}
+                }
             };
             if ui.button("Delete").clicked() {
-                //
+                match self.reg_type {
+                    RegType::GPR => {
+                        data.registers[0].retain(|r| *r != self.gpr_name);
+                    }
+                    RegType::Vector => {
+                        data.registers[0].retain(|r| *r != (self.vec_name, self.vec_index));
+                        data.vector_regs_size.remove(&(self.vec_name, self.vec_index));
+                    }
+                    _ => {/*None: Do nothing, there is NO possible to run into here!*/}
+                }
             };
         });
         // Order
@@ -183,8 +197,8 @@ impl VisualizerSetting {
         let mut source_col_row = None;
         let mut drop_col = None;
         let mut drop_row = None;
-        ui.columns(self.registers.len(), |uis| {
-            for (col_idx, column) in self.registers.clone().into_iter().enumerate() {
+        ui.columns(data.registers.len(), |uis| {
+            for (col_idx, column) in data.registers.clone().into_iter().enumerate() {
                 let ui = &mut uis[col_idx];
                 let can_accept_what_is_being_dragged = true;
                 let response = drop_target(ui, can_accept_what_is_being_dragged, |ui| {
@@ -194,10 +208,10 @@ impl VisualizerSetting {
 
                         let drop_response = drop_target(ui, can_accept_what_is_being_dragged, |ui| {
                             drag_source(ui, item_id, |ui| {
-                                let response = ui.add(Label::new(item).sense(Sense::click()));
+                                let response = ui.add(Label::new(format!("{}", item)).sense(Sense::click()));
                                 response.context_menu(|ui| {
                                     if ui.button("Remove").clicked() {
-                                        self.registers[col_idx].remove(row_idx);
+                                        data.registers[col_idx].remove(row_idx);
                                         ui.close_menu();
                                     }
                                 });
@@ -220,7 +234,7 @@ impl VisualizerSetting {
 
                 let response = response.context_menu(|ui| {
                     if ui.button("New Item").clicked() {
-                        self.registers[col_idx].push("New Item".to_owned());
+                        data.registers[col_idx].push(Register::none());
                         ui.close_menu();
                     }
                 });
@@ -237,7 +251,7 @@ impl VisualizerSetting {
                 if let Some(drop_row) = drop_row {
                     // with drop row
                     if ui.input(|i| i.pointer.any_released()) {
-                        let item = self.registers[source_col].remove(source_row);
+                        let item = data.registers[source_col].remove(source_row);
                         let insert_at = if source_col != drop_col {
                             drop_row
                         } else {
@@ -247,13 +261,13 @@ impl VisualizerSetting {
                                 drop_row - 1
                             }
                         };
-                        self.registers[drop_col].insert(insert_at, item);
+                        data.registers[drop_col].insert(insert_at, item);
                     }
                 } else {
                     // without drop row
                     if ui.input(|i| i.pointer.any_released()) {
-                        let item = self.registers[source_col].remove(source_row);
-                        self.registers[drop_col].push(item);
+                        let item = data.registers[source_col].remove(source_row);
+                        data.registers[drop_col].push(item);
                     }
                 }
             }
