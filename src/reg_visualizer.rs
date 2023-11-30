@@ -2,6 +2,20 @@ use std::collections::HashMap;
 use eframe::egui::{self, Vec2, Pos2, Ui, Color32};
 use super::*;
 
+pub fn get_size_from_value(value: &Value) -> Vec2 {
+    match value {
+        Value::U8(_) => {Vec2::new(15.0, 25.0)}
+        Value::U16(_) => {Vec2::new(30.0, 25.0)}
+        Value::U32(_) => {Vec2::new(60.0, 25.0)}
+        Value::U64(_) => {Vec2::new(120.0, 25.0)}
+        Value::U128(_) => {Vec2::new(240.0, 25.0)}
+        Value::U256(_) => {Vec2::new(480.0, 25.0)}
+        Value::U512(_) => {Vec2::new(920.0, 25.0)}
+        Value::F32(_) => {Vec2::new(60.0, 25.0)}
+        Value::F64(_) => {Vec2::new(120.0, 25.0)}
+    }
+}
+
 fn get_color(reg: &String) -> Color32 {
     match reg.as_str() {
         "XMM0" | "YMM0" | "ZMM0" | "RAX" | "EAX" | "AX" | "AH" | "AL" => Color32::from_rgb(255, 255, 255),
