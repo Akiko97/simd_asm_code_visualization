@@ -19,7 +19,7 @@ use utilities::*;
 struct RegVisualizerData {
     // Registers Data
     registers: Vec<Vec<Register>>,
-    vector_regs_size: HashMap<(VecRegName, usize), usize>,
+    vector_regs_type: HashMap<(VecRegName, usize), ValueType>,
     // Animation Data
     velocity: f32,
 }
@@ -29,7 +29,7 @@ impl Default for RegVisualizerData {
         Self {
             // Registers Data
             registers: vec![vec![]],
-            vector_regs_size: HashMap::new(),
+            vector_regs_type: HashMap::new(),
             // Animation Data
             velocity: 10f32,
         }
@@ -167,27 +167,11 @@ impl App for APP {
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
             .open(&mut self.show_visualizer)
             .show(ctx, |ui| {
-                if ui.button("add").clicked() {
-                    self.register_visualizer.insert_vector(VecRegName::XMM, 0, vec![
-                        Value::U32(0), Value::U32(0), Value::U32(0), Value::U32(0),
-                    ]);
-                    self.register_visualizer.insert_gpr(GPRName::RAX, Value::U64(0));
-                    self.register_visualizer.insert_vector(VecRegName::ZMM, 0, vec![
-                        Value::U512(u512::max_value())
-                    ]);
-                    self.register_visualizer.insert_gpr(GPRName::AH, Value::U8(255));
-                }
-                if ui.button("remove").clicked() {
-                    self.register_visualizer.remove_vector(VecRegName::XMM, 0);
-                    self.register_visualizer.remove_gpr(GPRName::RAX);
-                    self.register_visualizer.remove_vector(VecRegName::ZMM, 0);
-                    self.register_visualizer.remove_gpr(GPRName::AH);
-                }
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt
                 });
-                self.register_visualizer.update(delta_time);
-                self.register_visualizer.show(ui);
+                self.register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
+                self.register_visualizer.show(ui, &self.reg_visualizer_data, &self.cpu);
                 if self.register_visualizer.is_animating() {
                     ctx.request_repaint();
                 }

@@ -1,6 +1,20 @@
 use super::*;
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use cpulib::{VecRegName, GPRName, u256, u512};
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub enum ValueType {
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    U256,
+    U512,
+    F32,
+    F64,
+}
 
 #[derive(Copy, Clone)]
 pub enum Value {
@@ -105,11 +119,63 @@ value_compare!(f64, F64);
 
 impl Eq for Value {}
 
+impl Hash for Value {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Value::U8(v) => v.hash(state),
+            Value::U16(v) => v.hash(state),
+            Value::U32(v) => v.hash(state),
+            Value::U64(v) => v.hash(state),
+            Value::U128(v) => v.hash(state),
+            Value::U256(v) => v.hash(state),
+            Value::U512(v) => v.hash(state),
+            Value::F32(v) => v.to_bits().hash(state),
+            Value::F64(v) => v.to_bits().hash(state),
+        }
+    }
+}
+
+pub trait IntoValue {
+    fn into_value(self) -> Value;
+}
+
+macro_rules! into_value_rule {
+    ($t:ty, $tn:ident) => {
+        impl IntoValue for $t {
+            fn into_value(self) -> Value {
+                Value::$tn(self)
+            }
+        }
+    };
+}
+
+into_value_rule!(u8, U8);
+into_value_rule!(u16, U16);
+into_value_rule!(u32, U32);
+into_value_rule!(u64, U64);
+into_value_rule!(u128, U128);
+into_value_rule!(u256, U256);
+into_value_rule!(u512, U512);
+into_value_rule!(f32, F32);
+into_value_rule!(f64, F64);
+
+pub fn create_value<T: IntoValue>(input: T) -> Value {
+    input.into_value()
+}
+
+pub fn create_values<T: IntoValue>(input: Vec<T>) -> Vec<Value> {
+    input.into_iter().map(|x| create_value(x)).collect()
+}
+
 pub fn get_vec_reg_name(reg: &VecRegName, reg_index: &usize) -> String {
     format!("{}{}", reg, reg_index)
 }
 
 pub fn get_gpr_name(reg: &GPRName) -> String {
+    format!("{}", reg)
+}
+
+pub fn get_reg_name(reg: &Register) -> String {
     format!("{}", reg)
 }
 
@@ -123,6 +189,18 @@ pub struct Register {
     reg_type: RegType,
     gpr: GPRName,
     vector: (VecRegName, usize),
+}
+
+impl Register {
+    pub fn get_type(&self) -> RegType {
+        self.reg_type
+    }
+    pub fn get_gpr(&self) -> GPRName {
+        self.gpr
+    }
+    pub fn get_vector(&self) -> (VecRegName, usize) {
+        self.vector
+    }
 }
 
 impl Display for Register {
@@ -167,6 +245,17 @@ impl PartialEq<(VecRegName, usize)> for Register {
 }
 
 impl Eq for Register {}
+
+impl Hash for Register {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.reg_type.hash(state);
+        match self.reg_type {
+            RegType::GPR => self.gpr.hash(state),
+            RegType::Vector => self.vector.hash(state),
+            RegType::None => {}
+        }
+    }
+}
 
 impl Register {
     pub fn none() -> Self {

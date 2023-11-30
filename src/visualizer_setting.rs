@@ -28,7 +28,8 @@ fn drag_source(ui: &mut Ui, id: Id, body: impl FnOnce(&mut Ui)) {
         // So this is fine!
 
         if let Some(pointer_pos) = ui.ctx().pointer_interact_pos() {
-            let delta = pointer_pos - response.rect.center();
+            // let delta = pointer_pos - response.rect.center();
+            let delta = pointer_pos - response.rect.left_center();
             ui.ctx().translate_layer(layer_id, delta);
         }
     }
@@ -78,7 +79,7 @@ pub struct VisualizerSetting {
     gpr_name: GPRName,
     vec_name: VecRegName,
     vec_index: usize,
-    data_size: usize,
+    data_type: ValueType,
 }
 
 impl Default for VisualizerSetting {
@@ -89,7 +90,7 @@ impl Default for VisualizerSetting {
             gpr_name: GPRName::RAX,
             vec_name: VecRegName::YMM,
             vec_index: 0,
-            data_size: 32,
+            data_type: ValueType::U32,
         }
     }
 }
@@ -108,7 +109,6 @@ impl VisualizerSetting {
         if slider_response.changed() {
             data.velocity = self.velocity;
         }
-
         ui.label("Setting Registers:");
         ui.horizontal(|ui| {
             ui.label("Type:");
@@ -145,19 +145,20 @@ impl VisualizerSetting {
                         }
                     });
                 ui.horizontal(|ui| {
-                    ui.label("Data Size:");
-                    ui.radio_value(&mut self.data_size, 8, "8");
-                    ui.radio_value(&mut self.data_size, 16, "16");
-                    ui.radio_value(&mut self.data_size, 32, "32");
-                    ui.radio_value(&mut self.data_size, 64, "64");
-                    ui.radio_value(&mut self.data_size, 64, "128");
+                    ui.label("Data Type:");
+                    ui.radio_value(&mut self.data_type, ValueType::U8, "U8");
+                    ui.radio_value(&mut self.data_type, ValueType::U16, "U16");
+                    ui.radio_value(&mut self.data_type, ValueType::U32, "U32");
+                    ui.radio_value(&mut self.data_type, ValueType::F32, "F32");
+                    ui.radio_value(&mut self.data_type, ValueType::U64, "U64");
+                    ui.radio_value(&mut self.data_type, ValueType::F64, "F64");
+                    ui.radio_value(&mut self.data_type, ValueType::U128, "U128");
                     if self.vec_name == VecRegName::YMM || self.vec_name == VecRegName::ZMM {
-                        ui.radio_value(&mut self.data_size, 64, "256");
+                        ui.radio_value(&mut self.data_type, ValueType::U256, "U256");
                     }
                     if self.vec_name == VecRegName::ZMM {
-                        ui.radio_value(&mut self.data_size, 64, "512");
+                        ui.radio_value(&mut self.data_type, ValueType::U512, "U512");
                     }
-                    ui.label("Bits");
                 });
             }
             _ => {/*None: Do nothing, there is NO possible to run into here!*/}
@@ -174,7 +175,7 @@ impl VisualizerSetting {
                         if !data.registers[0].iter().any(|r| *r == (self.vec_name, self.vec_index)) {
                             data.registers[0].push(Register::vector(self.vec_name, self.vec_index));
                         }
-                        data.vector_regs_size.insert((self.vec_name, self.vec_index), self.data_size);
+                        data.vector_regs_type.insert((self.vec_name, self.vec_index), self.data_type);
                     }
                     _ => {/*None: Do nothing, there is NO possible to run into here!*/}
                 }
@@ -186,13 +187,14 @@ impl VisualizerSetting {
                     }
                     RegType::Vector => {
                         data.registers[0].retain(|r| *r != (self.vec_name, self.vec_index));
-                        data.vector_regs_size.remove(&(self.vec_name, self.vec_index));
+                        data.vector_regs_type.remove(&(self.vec_name, self.vec_index));
                     }
                     _ => {/*None: Do nothing, there is NO possible to run into here!*/}
                 }
             };
         });
         // Order
+        ui.label("Order:");
         let id_source = "visualizer_setting_registers";
         let mut source_col_row = None;
         let mut drop_col = None;

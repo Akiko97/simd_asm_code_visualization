@@ -171,103 +171,80 @@ impl Element {
 
 pub struct RegVisualizer {
     // Visualization Data
-    registers: HashMap<String, Vec<Value>>,
-    order: Vec<String>,
-    // Visualization Data
-    elements: HashMap<String, Vec<Element>>,
-    // Animation
-    velocity: f32,
+    elements: HashMap<Register, Vec<Element>>,
 }
 
 impl Default for RegVisualizer {
     fn default() -> Self {
         Self {
-            // Layout Data
-            registers: HashMap::new(),
-            order: vec![],
             // Visualization Data
             elements: HashMap::new(),
-            // Animation
-            velocity: 10f32,
         }
     }
 }
 
 impl RegVisualizer {
-    pub fn insert_vector(&mut self, reg: VecRegName, reg_index: usize, values: Vec<Value>) {
-        let reg_name = get_vec_reg_name(&reg, &reg_index);
-        self.registers.insert(reg_name.clone(), values);
-        self.order.push(reg_name);
-    }
-    pub fn remove_vector(&mut self, reg: VecRegName, reg_index: usize) {
-        let reg_name = get_vec_reg_name(&reg, &reg_index);
-        // Remove registers
-        self.registers.remove(&reg_name);
-        // Remove elements
-        self.elements.remove(&reg_name);
-        // Remove Order
-        self.order.retain(|item| *item != reg_name);
-    }
-    pub fn insert_gpr(&mut self, reg: GPRName, value: Value) {
-        let reg_name = get_gpr_name(&reg);
-        self.registers.insert(reg_name.clone(), vec![value]);
-        self.order.push(reg_name);
-    }
-    pub fn remove_gpr(&mut self, reg: GPRName) {
-        let reg_name = get_gpr_name(&reg);
-        // Remove registers
-        self.registers.remove(&reg_name);
-        // Remove elements
-        self.elements.remove(&reg_name);
-        // Remove Order
-        self.order.retain(|item| *item != reg_name);
-    }
-}
-
-impl RegVisualizer {
-    pub fn get_velocity(&self) -> f32 {
-        self.velocity
-    }
-    pub fn set_velocity(&mut self, velocity: f32) {
-        self.velocity = velocity;
-    }
     pub fn is_animating(&self) -> bool {
         self.elements.values().any(|vec| vec.iter().any(|el| el.animating))
     }
 }
 
 impl RegVisualizer {
-    pub fn update(&mut self, delta_time: f32) {
+    pub fn update(&mut self, delta_time: f32, velocity: f32) {
         self.elements.iter_mut().for_each(|(_, vec)| {
             vec.iter_mut().for_each(|element| {
-                element.update(delta_time, self.velocity);
+                element.update(delta_time, velocity);
             });
         });
     }
-    pub fn show(&mut self, ui: &mut Ui) {
+    pub fn show(&mut self, ui: &mut Ui, data: &RegVisualizerData, cpu: &CPU) {
+        // Layout & Update Elements
         ui.vertical(|ui| {
-            self.order.iter().for_each(|reg_name| {
-                if let Some(values) = self.registers.get(reg_name) {
-                    ui.vertical(|ui| {
-                        ui.label(reg_name.clone());
-                        ui.spacing_mut().item_spacing.x = 0.0;
-                        ui.horizontal(|ui| {
-                            let size = get_size_from_value(&values[0]);
-                            let mut element_vec = vec![];
-                            values.iter().for_each(|value| {
-                                let (layout_rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
-                                element_vec.push(Element::default()
-                                    .with_value(value.clone())
-                                    .with_position(layout_rect.min)
-                                    .with_color(get_color(&reg_name))
-                                    .with_border_color(get_border_color(&reg_name)));
-                            });
-                            self.elements.insert(reg_name.clone(), element_vec);
-                        });
-                    });
+            data.registers[0].iter().for_each(|reg| {
+                let mut values: Vec<Value> = vec![];
+                match reg.get_type() {
+                    RegType::GPR => {
+                        let v = cpu.registers.get_gpr_value(reg.get_gpr());
+                        values = vec![create_value(v)];
+                    }
+                    RegType::Vector => {
+                        let (reg_type, reg_index) = reg.get_vector();
+                        let value_type = *data.vector_regs_type.get(&reg.get_vector()).unwrap();
+                        values = match value_type {
+                            ValueType::U8 => create_values(cpu.registers.get_by_sections::<u8>(reg_type, reg_index).unwrap()),
+                            ValueType::U16 => create_values(cpu.registers.get_by_sections::<u16>(reg_type, reg_index).unwrap()),
+                            ValueType::U32 => create_values(cpu.registers.get_by_sections::<u32>(reg_type, reg_index).unwrap()),
+                            ValueType::U64 => create_values(cpu.registers.get_by_sections::<u64>(reg_type, reg_index).unwrap()),
+                            ValueType::U128 => create_values(cpu.registers.get_by_sections::<u128>(reg_type, reg_index).unwrap()),
+                            ValueType::U256 => create_values(cpu.registers.get_by_sections::<u256>(reg_type, reg_index).unwrap()),
+                            ValueType::U512 => create_values(cpu.registers.get_by_sections::<u512>(reg_type, reg_index).unwrap()),
+                            ValueType::F32 => create_values(Utilities::u32vec_to_f32vec(cpu.registers.get_by_sections::<u32>(reg_type, reg_index).unwrap())),
+                            ValueType::F64 => create_values(Utilities::u64vec_to_f64vec(cpu.registers.get_by_sections::<u64>(reg_type, reg_index).unwrap())),
+                        }
+                    }
+                    _ => {/*None: Do nothing, there is NO possible to run into here!*/}
                 }
+                ui.vertical(|ui| {
+                    ui.label(get_reg_name(reg).clone());
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    ui.horizontal(|ui| {
+                        let size = get_size_from_value(&values[0]);
+                        let mut element_vec = vec![];
+                        values.iter().for_each(|value| {
+                            let (layout_rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
+                            element_vec.push(Element::default()
+                                .with_value(value.clone())
+                                .with_position(layout_rect.min)
+                                .with_color(get_color(&get_reg_name(reg)))
+                                .with_border_color(get_border_color(&get_reg_name(reg))));
+                        });
+                        self.elements.insert(reg.clone(), element_vec);
+                    });
+                });
             });
         });
+        // Clean Elements
+        self.elements.retain(|reg_in_elements, _| data.registers[0].iter().any(|reg_in_data| *reg_in_elements == *reg_in_data));
         // Show every elements
         self.elements.iter().for_each(|(_, vec)| {
             vec.iter().for_each(|element| {
