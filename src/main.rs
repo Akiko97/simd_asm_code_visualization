@@ -4,17 +4,23 @@
 use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName, FLAGSName, IPName};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use std::collections::HashMap;
+use std::thread::sleep;
 use eframe::{App, Frame, NativeOptions};
-use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel};
-
+use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel, Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Shape, Rect, epaint, Label, Slider, ComboBox, Color32};
 mod reg_visualizer;
-use reg_visualizer::{RegVisualizer, Value};
+mod visualizer_setting;
+mod utilities;
+
+use reg_visualizer::{RegVisualizer};
+use visualizer_setting::{VisualizerSetting};
+use utilities::*;
 
 struct APP {
     // CPU Emulator
     cpu: CPU,
-    // Register
+    // Windows
     register_visualizer: RegVisualizer,
+    visualizer_setting: VisualizerSetting,
     // Code Editor
     code: String,
     highlight: usize,
@@ -31,8 +37,9 @@ impl Default for APP {
         Self {
             // CPU Emulator
             cpu: CPU::default(),
-            // Register
+            // Windows
             register_visualizer: RegVisualizer::default(),
+            visualizer_setting: VisualizerSetting::default(),
             // Code Editor
             code: "".into(),
             highlight: 0,
@@ -131,7 +138,7 @@ impl App for APP {
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
             .open(&mut self.show_settings)
             .show(ctx, |ui| {
-                ui.label("Settings");
+                self.visualizer_setting.show(ui);
             });
         Window::new("Visualizer")
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
