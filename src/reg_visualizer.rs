@@ -73,7 +73,7 @@ impl Default for Element {
     fn default() -> Self {
         Self {
             // Data
-            value: Value::U64(0u64),
+            value: Value::default(),
             // Animation
             color: Color32::TRANSPARENT,
             border_color: Color32::TRANSPARENT,
@@ -116,13 +116,13 @@ impl Element {
         let rect_size = get_size_from_value(&self.value);
         // Display Rectangle
         ui.painter().rect_filled(
-            egui::Rect::from_min_size(self.position, rect_size),
+            Rect::from_min_size(self.position, rect_size),
             0.0,
             self.color,
         );
         // Display Border
         ui.painter().rect_stroke(
-            egui::Rect::from_min_size(self.position, rect_size),
+            Rect::from_min_size(self.position, rect_size),
             0.0,
             egui::Stroke::new(2.0, self.border_color),
         );
@@ -172,6 +172,7 @@ impl Element {
 pub struct RegVisualizer {
     // Visualization Data
     elements: HashMap<Register, Vec<Element>>,
+    // Animation Data
 }
 
 impl Default for RegVisualizer {
@@ -179,6 +180,7 @@ impl Default for RegVisualizer {
         Self {
             // Visualization Data
             elements: HashMap::new(),
+            // Animation Data
         }
     }
 }
@@ -205,7 +207,7 @@ impl RegVisualizer {
                 match reg.get_type() {
                     RegType::GPR => {
                         let v = cpu.registers.get_gpr_value(reg.get_gpr());
-                        values = vec![create_value(v)];
+                        values = vec![create_value_with_gpr(v, &reg.get_gpr(), data.gprs_type.get(&reg.get_gpr()).unwrap())];
                     }
                     RegType::Vector => {
                         let (reg_type, reg_index) = reg.get_vector();
@@ -231,7 +233,7 @@ impl RegVisualizer {
                         let size = get_size_from_value(&values[0]);
                         let mut element_vec = vec![];
                         values.iter().for_each(|value| {
-                            let (layout_rect, _response) = ui.allocate_exact_size(size, egui::Sense::hover());
+                            let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
                             element_vec.push(Element::default()
                                 .with_value(value.clone())
                                 .with_position(layout_rect.min)
@@ -253,3 +255,5 @@ impl RegVisualizer {
         });
     }
 }
+
+// Animation

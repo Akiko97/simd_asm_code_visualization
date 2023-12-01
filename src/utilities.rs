@@ -16,6 +16,11 @@ pub enum ValueType {
     F64,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub enum UIntFloat {
+    UInt, Float
+}
+
 #[derive(Copy, Clone)]
 pub enum Value {
     U8(u8),
@@ -27,6 +32,12 @@ pub enum Value {
     U512(u512),
     F32(f32),
     F64(f64),
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        Self::U64(0u64)
+    }
 }
 
 impl Display for Value {
@@ -165,6 +176,28 @@ pub fn create_value<T: IntoValue>(input: T) -> Value {
 
 pub fn create_values<T: IntoValue>(input: Vec<T>) -> Vec<Value> {
     input.into_iter().map(|x| create_value(x)).collect()
+}
+
+pub fn create_value_with_gpr(input: u64, reg: &GPRName, value_type: &UIntFloat) -> Value {
+    match Utilities::get_gpr_size(reg) {
+        64 => {
+            match value_type {
+                UIntFloat::UInt => create_value(input),
+                UIntFloat::Float => create_value(Utilities::u64_to_f64(input)),
+            }
+        },
+        32 => {
+            match value_type {
+                UIntFloat::UInt => create_value(input as u32),
+                UIntFloat::Float => create_value(Utilities::u32_to_f32(input as u32)),
+            }
+        },
+        16 => {
+            create_value(input as u16)
+        },
+        8 => {create_value(input as u8)},
+        _ => {/*You will never run into here*/Value::default()}
+    }
 }
 
 pub fn get_vec_reg_name(reg: &VecRegName, reg_index: &usize) -> String {

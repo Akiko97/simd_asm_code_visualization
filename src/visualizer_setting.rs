@@ -80,6 +80,7 @@ pub struct VisualizerSetting {
     vec_name: VecRegName,
     vec_index: usize,
     data_type: ValueType,
+    gpr_type: UIntFloat,
 }
 
 impl Default for VisualizerSetting {
@@ -91,8 +92,17 @@ impl Default for VisualizerSetting {
             vec_name: VecRegName::YMM,
             vec_index: 0,
             data_type: ValueType::U32,
+            gpr_type: UIntFloat::UInt,
         }
     }
+}
+
+macro_rules! create_gpr_selectable {
+    ($ui:expr; $self:expr; $($reg:ident),*) => {
+        $(
+            $ui.selectable_value(&mut $self.gpr_name, GPRName::$reg, stringify!($reg));
+        )*
+    };
 }
 
 impl VisualizerSetting {
@@ -122,8 +132,30 @@ impl VisualizerSetting {
                     .show_ui(ui, |ui| {
                         ui.style_mut().wrap = Some(false);
                         ui.set_min_width(60.0);
-                        ui.selectable_value(&mut self.gpr_name, GPRName::RAX, "RAX");
+                        create_gpr_selectable!(ui; self;
+                            // 64-bit registers
+                            RAX, RBX, RCX, RDX, RSI, RDI, RBP, RSP,
+                            R8, R9, R10, R11, R12, R13, R14, R15,
+                            // 32-bit registers
+                            EAX, EBX, ECX, EDX, ESI, EDI, EBP, ESP,
+                            R8D, R9D, R10D, R11D, R12D, R13D, R14D, R15D,
+                            // 16-bit registers
+                            AX, BX, CX, DX, SI, DI, BP, SP,
+                            R8W, R9W, R10W, R11W, R12W, R13W, R14W, R15W,
+                            // 8-bit registers
+                            AH, BH, CH, DH, AL, BL, CL, DL, SIL, DIL, BPL, SPL,
+                            R8B, R9B, R10B, R11B, R12B, R13B, R14B, R15B);
                     });
+                match Utilities::get_gpr_size(&self.gpr_name) {
+                    64 | 32 => {
+                        ui.horizontal(|ui| {
+                            ui.label("Data Type:");
+                            ui.radio_value(&mut self.gpr_type, UIntFloat::UInt, "UInt");
+                            ui.radio_value(&mut self.gpr_type, UIntFloat::Float, "Float");
+                        });
+                    }
+                    _ => {},
+                }
             }
             RegType::Vector => {
                 ComboBox::from_label("Vector Register")
@@ -170,6 +202,7 @@ impl VisualizerSetting {
                         if !data.registers[0].iter().any(|r| *r == self.gpr_name) {
                             data.registers[0].push(Register::gpr(self.gpr_name));
                         }
+                        data.gprs_type.insert(self.gpr_name, self.gpr_type);
                     }
                     RegType::Vector => {
                         if !data.registers[0].iter().any(|r| *r == (self.vec_name, self.vec_index)) {
@@ -184,6 +217,7 @@ impl VisualizerSetting {
                 match self.reg_type {
                     RegType::GPR => {
                         data.registers[0].retain(|r| *r != self.gpr_name);
+                        data.gprs_type.remove(&self.gpr_name);
                     }
                     RegType::Vector => {
                         data.registers[0].retain(|r| *r != (self.vec_name, self.vec_index));
@@ -254,16 +288,7 @@ impl VisualizerSetting {
                     // with drop row
                     if ui.input(|i| i.pointer.any_released()) {
                         let item = data.registers[source_col].remove(source_row);
-                        let insert_at = if source_col != drop_col {
-                            drop_row
-                        } else {
-                            if source_row >= drop_row {
-                                drop_row
-                            } else {
-                                drop_row - 1
-                            }
-                        };
-                        data.registers[drop_col].insert(insert_at, item);
+                        data.registers[drop_col].insert(drop_row, item);
                     }
                 } else {
                     // without drop row

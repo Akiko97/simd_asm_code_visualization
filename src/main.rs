@@ -20,6 +20,7 @@ struct RegVisualizerData {
     // Registers Data
     registers: Vec<Vec<Register>>,
     vector_regs_type: HashMap<(VecRegName, usize), ValueType>,
+    gprs_type: HashMap<GPRName, UIntFloat>,
     // Animation Data
     velocity: f32,
 }
@@ -30,6 +31,7 @@ impl Default for RegVisualizerData {
             // Registers Data
             registers: vec![vec![]],
             vector_regs_type: HashMap::new(),
+            gprs_type: HashMap::new(),
             // Animation Data
             velocity: 10f32,
         }
