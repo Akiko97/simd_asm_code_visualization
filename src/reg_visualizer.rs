@@ -61,6 +61,7 @@ fn get_border_color(reg: &String) -> Color32 {
 struct Element {
     // Data
     value: Value,
+    string: Option<String>,
     // Animation
     color: Color32,
     border_color: Color32,
@@ -74,6 +75,7 @@ impl Default for Element {
         Self {
             // Data
             value: Value::default(),
+            string: None,
             // Animation
             color: Color32::TRANSPARENT,
             border_color: Color32::TRANSPARENT,
@@ -131,7 +133,11 @@ impl Element {
         let mut text_size;
         loop {
             let galley = ui.painter().layout_no_wrap(
-                format!("{}", self.value),
+                if let Some(text) = &self.string {
+                    text.clone()
+                } else {
+                    format!("{}", self.value)
+                },
                 egui::FontId::new(font_size, egui::FontFamily::Monospace),
                 Color32::BLACK,
             );
@@ -171,16 +177,24 @@ impl Element {
 
 pub struct RegVisualizer {
     // Visualization Data
+    layout_data: HashMap<Register, Vec<Pos2>>, // TODO
     elements: HashMap<Register, Vec<Element>>,
     // Animation Data
+    animation_config: HashMap<Register, RegAnimationConfig>,
+    animation_layout_data: HashMap<(Register, LayoutLocation), Pos2>, // TODO
+    animation_elements: HashMap<(Register, LayoutLocation), Vec<Element>>, // TODO
 }
 
 impl Default for RegVisualizer {
     fn default() -> Self {
         Self {
             // Visualization Data
+            layout_data: HashMap::new(),
             elements: HashMap::new(),
             // Animation Data
+            animation_config: HashMap::new(),
+            animation_layout_data: HashMap::new(),
+            animation_elements: HashMap::new(),
         }
     }
 }
@@ -199,10 +213,29 @@ impl RegVisualizer {
             });
         });
     }
+
+    fn create_layout(ui: &mut Ui, size: Vec2, reg: &Register, values: &Vec<Value>, elements: Option<&mut HashMap<Register, Vec<Element>>>) {
+        ui.horizontal(|ui| {
+            let mut element_vec = vec![];
+            values.iter().for_each(|value| {
+                let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
+                element_vec.push(Element::default()
+                    .with_value(value.clone())
+                    .with_position(layout_rect.min)
+                    .with_color(get_color(&get_reg_name(reg)))
+                    .with_border_color(get_border_color(&get_reg_name(reg))));
+            });
+            if let Some(elements) = elements {
+                elements.insert(reg.clone(), element_vec);
+            }
+        });
+    }
+
     pub fn show(&mut self, ui: &mut Ui, data: &RegVisualizerData, cpu: &CPU) {
         // Layout & Update Elements
         ui.vertical(|ui| {
             data.registers[0].iter().for_each(|reg| {
+                // Load values from CPU
                 let mut values: Vec<Value> = vec![];
                 match reg.get_type() {
                     RegType::GPR => {
@@ -226,22 +259,26 @@ impl RegVisualizer {
                     }
                     _ => {/*None: Do nothing, there is NO possible to run into here!*/}
                 }
+                // Show UI
                 ui.vertical(|ui| {
                     ui.label(get_reg_name(reg).clone());
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    ui.horizontal(|ui| {
-                        let size = get_size_from_value(&values[0]);
-                        let mut element_vec = vec![];
-                        values.iter().for_each(|value| {
-                            let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
-                            element_vec.push(Element::default()
-                                .with_value(value.clone())
-                                .with_position(layout_rect.min)
-                                .with_color(get_color(&get_reg_name(reg)))
-                                .with_border_color(get_border_color(&get_reg_name(reg))));
-                        });
-                        self.elements.insert(reg.clone(), element_vec);
-                    });
+                    ui.spacing_mut().item_spacing.x = 0.0; // Set spaces between elements to 0
+                    let location = if let Some(config) = self.animation_config.get(reg) {
+                        config.location
+                    } else {
+                        LayoutLocation::None
+                    };
+                    let size = get_size_from_value(&values[0]);
+                    // Animation Layout - TOP
+                    if location == LayoutLocation::TOP || location == LayoutLocation::BOTH {
+                        RegVisualizer::create_layout(ui, size, reg, &values, None);
+                    }
+                    // Elements Layout
+                    RegVisualizer::create_layout(ui, size, reg, &values, Some(&mut self.elements));
+                    // Animation Layout - BOTTOM
+                    if location == LayoutLocation::BOTTOM || location == LayoutLocation::BOTH {
+                        RegVisualizer::create_layout(ui, size, reg, &values, None);
+                    }
                 });
             });
         });
@@ -257,3 +294,47 @@ impl RegVisualizer {
 }
 
 // Animation
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub enum LayoutLocation {
+    TOP, BOTTOM, BOTH, None
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+struct RegAnimationConfig {
+    location: LayoutLocation,
+    show_element: bool,
+}
+
+impl Default for RegAnimationConfig {
+    fn default() -> Self {
+        Self {
+            location: LayoutLocation::None,
+            show_element: false,
+        }
+    }
+}
+
+impl RegAnimationConfig {
+    fn with_location(self, location: LayoutLocation) -> Self {
+        Self {
+            location,
+            ..self
+        }
+    }
+    fn with_show(self, show_element: bool) -> Self {
+        Self {
+            show_element,
+            ..self
+        }
+    }
+}
+
+impl RegVisualizer {
+    pub fn create_animation_layout(&mut self, reg: Register, location: LayoutLocation) {
+        self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location));
+    }
+
+    pub fn remove_animation_layout(&mut self, reg: Register) {
+        self.animation_config.remove(&reg);
+    }
+}

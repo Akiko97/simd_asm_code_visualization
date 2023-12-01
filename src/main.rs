@@ -12,7 +12,7 @@ mod reg_visualizer;
 mod visualizer_setting;
 mod utilities;
 
-use reg_visualizer::{RegVisualizer};
+use reg_visualizer::{RegVisualizer, LayoutLocation};
 use visualizer_setting::{VisualizerSetting};
 use utilities::*;
 
@@ -169,6 +169,14 @@ impl App for APP {
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
             .open(&mut self.show_visualizer)
             .show(ctx, |ui| {
+                // Debug
+                if ui.button("Add").clicked() {
+                    self.register_visualizer.create_animation_layout(Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTH);
+                }
+                if ui.button("Remove").clicked() {
+                    self.register_visualizer.remove_animation_layout(Register::vector(VecRegName::YMM, 0));
+                }
+                // Show the register visualizer
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt
                 });
