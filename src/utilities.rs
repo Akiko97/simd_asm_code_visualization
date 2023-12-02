@@ -2,6 +2,11 @@ use super::*;
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use cpulib::{VecRegName, GPRName, u256, u512};
+use std::any::type_name;
+
+pub fn type_of<T>(_: &T) -> &str {
+    type_name::<T>()
+}
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub enum ValueType {

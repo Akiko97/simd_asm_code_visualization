@@ -176,6 +176,12 @@ impl App for APP {
                 if ui.button("Remove").clicked() {
                     self.register_visualizer.remove_animation_layout(Register::vector(VecRegName::YMM, 0));
                 }
+                if ui.button("Start").clicked() {
+                    self.register_visualizer.start_show_animation_elements(Register::vector(VecRegName::YMM, 0));
+                }
+                if ui.button("Start With Anime").clicked() {
+                    self.register_visualizer.start_show_animation_elements_with_anime(Register::vector(VecRegName::YMM, 0));
+                }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt
