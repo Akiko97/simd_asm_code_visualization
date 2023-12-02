@@ -112,7 +112,7 @@ impl VisualizerSetting {
         // UI
         ui.label("Setting Velocity:");
         let slider_response = ui.add(
-            Slider::new(&mut self.velocity, 10.0..=100.0)
+            Slider::new(&mut self.velocity, 10.0..=1000.0)
                 .logarithmic(true)
                 .text("Velocity"),
         );

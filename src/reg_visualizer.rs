@@ -182,12 +182,12 @@ impl Element {
 
 pub struct RegVisualizer {
     // Visualization Data
-    layout_data: HashMap<Register, Vec<(Pos2, Vec2)>>,
-    elements: HashMap<Register, Vec<Element>>,
+    layout_data: HashMap<Register, Vec<Vec<(Pos2, Vec2)>>>,
+    elements: HashMap<Register, Vec<Vec<Element>>>,
     // Animation Data
     animation_config: HashMap<Register, RegAnimationConfig>,
-    animation_layout_data: HashMap<(Register, LayoutLocation), Vec<(Pos2, Vec2)>>,
-    animation_elements: HashMap<(Register, LayoutLocation), Vec<Element>>,
+    animation_layout_data: HashMap<(Register, LayoutLocation), Vec<Vec<(Pos2, Vec2)>>>,
+    animation_elements: HashMap<(Register, LayoutLocation), Vec<Vec<Element>>>,
 }
 
 impl Default for RegVisualizer {
@@ -206,50 +206,74 @@ impl Default for RegVisualizer {
 
 impl RegVisualizer {
     pub fn is_animating(&self) -> bool {
-        self.elements.values().any(|vec| vec.iter().any(|el| el.animating)) ||
-            self.animation_elements.values().any(|vec| vec.iter().any(|el| el.animating))
+        self.elements.values().any(|vec| vec.iter().any(|els| els.iter().any(|el| el.animating))) ||
+            self.animation_elements.values().any(|vec| vec.iter().any(|els| els.iter().any(|el| el.animating)))
     }
 }
 
 impl RegVisualizer {
     pub fn update(&mut self, delta_time: f32, velocity: f32) {
         self.elements.iter_mut().for_each(|(_, vec)| {
-            vec.iter_mut().for_each(|element| {
-                element.update(delta_time, velocity);
+            vec.iter_mut().for_each(|elements| {
+                elements.iter_mut().for_each(|element| {
+                    element.update(delta_time, velocity);
+                });
             });
         });
         self.animation_elements.iter_mut().for_each(|(_, vec)| {
-            vec.iter_mut().for_each(|element| {
-                element.update(delta_time, velocity);
+            vec.iter_mut().for_each(|elements| {
+                elements.iter_mut().for_each(|element| {
+                    element.update(delta_time, velocity);
+                });
             });
         });
     }
 
-    fn create_layout<T: Hash + Clone + Eq + PartialEq>(ui: &mut Ui, size: Vec2, key: &T, data_size: usize, layout_data: &mut HashMap<T, Vec<(Pos2, Vec2)>>) {
-        ui.horizontal(|ui| {
-            let mut layout_vec = vec![];
-            (0..data_size).for_each(|_| {
-                let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
-                layout_vec.push((layout_rect.min, size));
-            });
-            layout_data.insert(key.clone(), (layout_vec));
-        });
-    }
-
-    fn create_elements<T: Hash + Clone + Eq + PartialEq>(values: &Vec<Value>, key: &T, reg: &Register, layout_data: &HashMap<T, Vec<(Pos2, Vec2)>>, elements: &mut HashMap<T, Vec<Element>>) {
-        if !elements.contains_key(key) {
-            if let Some(vec) = layout_data.get(key) {
-                if vec.len() == values.len() {
-                    let mut element_vec = vec![];
-                    vec.iter().enumerate().for_each(|(index, (position, size))| {
-                        element_vec.push(Element::default()
-                            .with_value(values[index].clone())
-                            .with_position(position.clone())
-                            .with_color(get_color(&get_reg_name(reg)))
-                            .with_border_color(get_border_color(&get_reg_name(reg))));
+    fn create_layout<T: Hash + Clone + Eq + PartialEq>(ui: &mut Ui, size: Vec2, key: &T, data_size: usize, repeat_number: usize, layout_data: &mut HashMap<T, Vec<Vec<(Pos2, Vec2)>>>) {
+        ui.vertical(|ui| {
+            let mut layout_vecs = vec![];
+            (0..repeat_number).for_each(|_| {
+                ui.horizontal(|ui| {
+                    let mut layout_vec = vec![];
+                    (0..data_size).for_each(|_| {
+                        let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
+                        layout_vec.push((layout_rect.min, size));
                     });
-                    elements.insert(key.clone(), element_vec);
-                }
+                    layout_vecs.push(layout_vec);
+
+                });
+            });
+            layout_data.insert(key.clone(), (layout_vecs));
+        });
+    }
+
+    fn create_elements<T: Hash + Clone + Eq + PartialEq>(values: &Vec<Value>, key: &T, reg: &Register, layout_data: &HashMap<T, Vec<Vec<(Pos2, Vec2)>>>, elements: &mut HashMap<T, Vec<Vec<Element>>>) {
+        let values_changed = if let Some(layout_vec) = layout_data.get(key) {
+            if let Some(elements_vec) = elements.get(key) {
+                layout_vec[0].len() != elements_vec[0].len()
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if !elements.contains_key(key) || values_changed {
+            if let Some(vecs) = layout_data.get(key) {
+                let mut element_vecs = vec![];
+                vecs.iter().for_each(|vec| {
+                    if vec.len() == values.len() {
+                        let mut element_vec = vec![];
+                        vec.iter().enumerate().for_each(|(index, (position, size))| {
+                            element_vec.push(Element::default()
+                                .with_value(values[index].clone())
+                                .with_position(position.clone())
+                                .with_color(get_color(&get_reg_name(reg)))
+                                .with_border_color(get_border_color(&get_reg_name(reg))));
+                        });
+                        element_vecs.push(element_vec);
+                    }
+                });
+                elements.insert(key.clone(), element_vecs);
             }
         }
     }
@@ -292,17 +316,22 @@ impl RegVisualizer {
                         LayoutLocation::None
                     };
                     let size = get_size_from_value(&values[0]);
+                    let repeat_number = if let Some(config) = self.animation_config.get(reg) {
+                        config.repeat_numbers
+                    } else {
+                        (0, 0)
+                    };
                     // Animation Layout - TOP
                     if location == LayoutLocation::TOP || location == LayoutLocation::BOTH {
-                        RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::TOP), values.len(), &mut self.animation_layout_data);
+                        RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::TOP), values.len(), repeat_number.0, &mut self.animation_layout_data);
                         RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::TOP), reg, &self.animation_layout_data, &mut self.animation_elements);
                     }
                     // Elements Layout
-                    RegVisualizer::create_layout(ui, size, reg, values.len(), &mut self.layout_data);
+                    RegVisualizer::create_layout(ui, size, reg, values.len(), 1, &mut self.layout_data);
                     RegVisualizer::create_elements(&values, reg, reg, &self.layout_data, &mut self.elements);
                     // Animation Layout - BOTTOM
                     if location == LayoutLocation::BOTTOM || location == LayoutLocation::BOTH {
-                        RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::BOTTOM), values.len(), &mut self.animation_layout_data);
+                        RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::BOTTOM), values.len(), repeat_number.1, &mut self.animation_layout_data);
                         RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::BOTTOM), reg, &self.animation_layout_data, &mut self.animation_elements);
                     }
                 });
@@ -317,38 +346,44 @@ impl RegVisualizer {
         self.elements.iter_mut().for_each(|(reg, elements)| {
             // if element in elements, then element must in layout
             let vec = self.layout_data.get(reg).unwrap();
-            elements.iter_mut().enumerate().for_each(|(index, element)| {
-                if element.layout_position != vec[index].0 {
-                    // layout changing
-                    let p = element.position - element.layout_position;
-                    let tp = element.target_position - element.layout_position;
-                    element.layout_position = vec[index].0;
-                    element.position = element.layout_position + p;
-                    element.target_position =  element.layout_position + tp;
-                }
+            (0..elements.len()).for_each(|i| {
+                elements[i].iter_mut().enumerate().for_each(|(j, element)| {
+                    if element.layout_position != vec[i][j].0 {
+                        // layout changing
+                        let p = element.position - element.layout_position;
+                        let tp = element.target_position - element.layout_position;
+                        element.layout_position = vec[i][j].0;
+                        element.position = element.layout_position + p;
+                        element.target_position =  element.layout_position + tp;
+                    }
+                });
             });
         });
         self.animation_elements.iter_mut().for_each(|(key, elements)| {
             // if element in elements, then element must in layout
             let vec = self.animation_layout_data.get(key).unwrap();
-            elements.iter_mut().enumerate().for_each(|(index, element)| {
-                if element.layout_position != vec[index].0 {
-                    // layout changing
-                    let p = element.position - element.layout_position;
-                    let tp = element.target_position - element.layout_position;
-                    element.layout_position = vec[index].0;
-                    element.position = element.layout_position + p;
-                    element.target_position =  element.layout_position + tp;
-                }
+            (0..elements.len()).for_each(|i| {
+                elements[i].iter_mut().enumerate().for_each(|(j, element)| {
+                    if element.layout_position != vec[i][j].0 {
+                        // layout changing
+                        let p = element.position - element.layout_position;
+                        let tp = element.target_position - element.layout_position;
+                        element.layout_position = vec[i][j].0;
+                        element.position = element.layout_position + p;
+                        element.target_position =  element.layout_position + tp;
+                    }
+                });
             });
         });
         // Show Elements
         let layer_id = LayerId::new(Order::Middle, Id::new("register_visualizer_elements"));
         ui.with_layer_id(layer_id, |ui| {
             self.elements.iter().for_each(|(_, vec)| {
-                vec.iter().for_each(|element| {
-                    element.show(ui);
-                })
+                vec.iter().for_each(|elements| {
+                    elements.iter().for_each(|element| {
+                        element.show(ui);
+                    });
+                });
             });
         });
         // Show Animation Elements
@@ -360,23 +395,29 @@ impl RegVisualizer {
                         match config.location {
                             LayoutLocation::TOP => {
                                 if *loc == LayoutLocation::TOP {
-                                    vec.iter().for_each(|element| {
-                                        element.show(ui);
-                                    })
+                                    vec.iter().for_each(|elements| {
+                                        elements.iter().for_each(|element| {
+                                            element.show(ui);
+                                        });
+                                    });
                                 }
                             }
                             LayoutLocation::BOTTOM => {
                                 if *loc == LayoutLocation::BOTTOM {
-                                    vec.iter().for_each(|element| {
-                                        element.show(ui);
-                                    })
+                                    vec.iter().for_each(|elements| {
+                                        elements.iter().for_each(|element| {
+                                            element.show(ui);
+                                        });
+                                    });
                                 }
                             }
                             LayoutLocation::BOTH => {
                                 if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
-                                    vec.iter().for_each(|element| {
-                                        element.show(ui);
-                                    })
+                                    vec.iter().for_each(|elements| {
+                                        elements.iter().for_each(|element| {
+                                            element.show(ui);
+                                        });
+                                    });
                                 }
                             }
                             LayoutLocation::None => {}
@@ -397,7 +438,7 @@ pub enum LayoutLocation {
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 struct RegAnimationConfig {
     location: LayoutLocation,
-    numbers: (usize, usize), // (TOP, BOTTOM)
+    repeat_numbers: (usize, usize), // (TOP, BOTTOM)
     show_element: bool,
 }
 
@@ -405,7 +446,7 @@ impl Default for RegAnimationConfig {
     fn default() -> Self {
         Self {
             location: LayoutLocation::None,
-            numbers: (0, 0),
+            repeat_numbers: (0, 0),
             show_element: false,
         }
     }
@@ -415,7 +456,7 @@ impl RegAnimationConfig {
     fn with_location(self, location: LayoutLocation) -> Self {
         Self {
             location,
-            numbers: if self.numbers == (0, 0) {
+            repeat_numbers: if self.repeat_numbers == (0, 0) {
                 match location {
                     LayoutLocation::TOP => (1, 0),
                     LayoutLocation::BOTTOM => (0, 1),
@@ -423,14 +464,14 @@ impl RegAnimationConfig {
                     LayoutLocation::None => (0, 0),
                 }
             } else {
-                self.numbers
+                self.repeat_numbers
             },
             ..self
         }
     }
-    fn with_numbers(self, numbers: (usize, usize)) -> Self {
+    fn with_repeat_numbers(self, repeat_numbers: (usize, usize)) -> Self {
         Self {
-            numbers,
+            repeat_numbers,
             ..self
         }
     }
@@ -452,8 +493,8 @@ impl RegVisualizer {
     pub fn create_animation_layout(&mut self, reg: Register, location: LayoutLocation) {
         self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location));
     }
-    pub fn create_animation_layout_with_numbers(&mut self, reg: Register, location: LayoutLocation, numbers: (usize, usize)) {
-        self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location).with_numbers(numbers));
+    pub fn create_animation_layout_with_repeat_numbers(&mut self, reg: Register, location: LayoutLocation, repeat_numbers: (usize, usize)) {
+        self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location).with_repeat_numbers(repeat_numbers));
     }
     pub fn remove_animation_layout(&mut self, reg: Register) {
         self.animation_config.remove(&reg);
@@ -467,44 +508,52 @@ impl RegVisualizer {
         if let Some(config) = self.animation_config.get_mut(&reg) {
             match config.location {
                 LayoutLocation::TOP => {
-                    if let Some(elements) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
                         if let Some(layout) = self.layout_data.get(&reg) {
-                            if elements.len() == layout.len() {
-                                elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                    element.position = layout[index].0;
-                                });
-                            }
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                    });
+                                }
+                            });
                         }
                     }
                 }
                 LayoutLocation::BOTTOM => {
-                    if let Some(elements) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
                         if let Some(layout) = self.layout_data.get(&reg) {
-                            if elements.len() == layout.len() {
-                                elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                    element.position = layout[index].0;
-                                });
-                            }
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                    });
+                                }
+                            });
                         }
                     }
                 }
                 LayoutLocation::BOTH => {
-                    if let Some(elements) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
                         if let Some(layout) = self.layout_data.get(&reg) {
-                            if elements.len() == layout.len() {
-                                elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                    element.position = layout[index].0;
-                                });
-                            }
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                    });
+                                }
+                            });
                         }
                     }
-                    if let Some(elements) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
                         if let Some(layout) = self.layout_data.get(&reg) {
-                            if elements.len() == layout.len() {
-                                elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                    element.position = layout[index].0;
-                                });
-                            }
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                    });
+                                }
+                            });
                         }
                     }
                 }
