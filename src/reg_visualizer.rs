@@ -343,41 +343,47 @@ impl RegVisualizer {
             });
         });
         // Show Elements
-        self.elements.iter().for_each(|(_, vec)| {
-            vec.iter().for_each(|element| {
-                element.show(ui);
-            })
+        let layer_id = LayerId::new(Order::Middle, Id::new("register_visualizer_elements"));
+        ui.with_layer_id(layer_id, |ui| {
+            self.elements.iter().for_each(|(_, vec)| {
+                vec.iter().for_each(|element| {
+                    element.show(ui);
+                })
+            });
         });
         // Show Animation Elements
-        self.animation_elements.iter().for_each(|((reg, loc), vec)| {
-            if let Some(config) = self.animation_config.get(reg) {
-                if config.show_element {
-                    match config.location {
-                        LayoutLocation::TOP => {
-                            if *loc == LayoutLocation::TOP {
-                                vec.iter().for_each(|element| {
-                                    element.show(ui);
-                                })
+        let animation_layer_id = LayerId::new(Order::Foreground, Id::new("register_visualizer_animation_elements"));
+        ui.with_layer_id(animation_layer_id, |ui| {
+            self.animation_elements.iter().for_each(|((reg, loc), vec)| {
+                if let Some(config) = self.animation_config.get(reg) {
+                    if config.show_element {
+                        match config.location {
+                            LayoutLocation::TOP => {
+                                if *loc == LayoutLocation::TOP {
+                                    vec.iter().for_each(|element| {
+                                        element.show(ui);
+                                    })
+                                }
                             }
-                        }
-                        LayoutLocation::BOTTOM => {
-                            if *loc == LayoutLocation::BOTTOM {
-                                vec.iter().for_each(|element| {
-                                    element.show(ui);
-                                })
+                            LayoutLocation::BOTTOM => {
+                                if *loc == LayoutLocation::BOTTOM {
+                                    vec.iter().for_each(|element| {
+                                        element.show(ui);
+                                    })
+                                }
                             }
-                        }
-                        LayoutLocation::BOTH => {
-                            if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
-                                vec.iter().for_each(|element| {
-                                    element.show(ui);
-                                })
+                            LayoutLocation::BOTH => {
+                                if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
+                                    vec.iter().for_each(|element| {
+                                        element.show(ui);
+                                    })
+                                }
                             }
+                            LayoutLocation::None => {}
                         }
-                        LayoutLocation::None => {}
                     }
                 }
-            }
+            });
         });
     }
 }
@@ -391,6 +397,7 @@ pub enum LayoutLocation {
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 struct RegAnimationConfig {
     location: LayoutLocation,
+    numbers: (usize, usize), // (TOP, BOTTOM)
     show_element: bool,
 }
 
@@ -398,6 +405,7 @@ impl Default for RegAnimationConfig {
     fn default() -> Self {
         Self {
             location: LayoutLocation::None,
+            numbers: (0, 0),
             show_element: false,
         }
     }
@@ -407,6 +415,22 @@ impl RegAnimationConfig {
     fn with_location(self, location: LayoutLocation) -> Self {
         Self {
             location,
+            numbers: if self.numbers == (0, 0) {
+                match location {
+                    LayoutLocation::TOP => (1, 0),
+                    LayoutLocation::BOTTOM => (0, 1),
+                    LayoutLocation::BOTH => (1, 1),
+                    LayoutLocation::None => (0, 0),
+                }
+            } else {
+                self.numbers
+            },
+            ..self
+        }
+    }
+    fn with_numbers(self, numbers: (usize, usize)) -> Self {
+        Self {
+            numbers,
             ..self
         }
     }
@@ -427,6 +451,9 @@ impl RegAnimationConfig {
 impl RegVisualizer {
     pub fn create_animation_layout(&mut self, reg: Register, location: LayoutLocation) {
         self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location));
+    }
+    pub fn create_animation_layout_with_numbers(&mut self, reg: Register, location: LayoutLocation, numbers: (usize, usize)) {
+        self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location).with_numbers(numbers));
     }
     pub fn remove_animation_layout(&mut self, reg: Register) {
         self.animation_config.remove(&reg);
