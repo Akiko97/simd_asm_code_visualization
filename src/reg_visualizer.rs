@@ -59,11 +59,42 @@ fn get_border_color(reg: &String) -> Color32 {
     }
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub enum ElementOrder {
+    Normal,        // None
+    Low,           // Middle
+    Middle,        // Foreground
+    High,          // Tooltip
+    Top,           // Debug
+}
+
+impl ElementOrder {
+    pub fn get_higher(&self) -> Self {
+        match self {
+            ElementOrder::Normal => ElementOrder::Low,
+            ElementOrder::Low => ElementOrder::Middle,
+            ElementOrder::Middle => ElementOrder::High,
+            ElementOrder::High => ElementOrder::Top,
+            ElementOrder::Top => ElementOrder::Top,
+        }
+    }
+    pub fn get_lower(&self) -> Self {
+        match self {
+            ElementOrder::Normal => ElementOrder::Normal,
+            ElementOrder::Low => ElementOrder::Normal,
+            ElementOrder::Middle => ElementOrder::Low,
+            ElementOrder::High => ElementOrder::Middle,
+            ElementOrder::Top => ElementOrder::High,
+        }
+    }
+}
+
 struct Element {
     // Data
     value: Value,
     string: Option<String>,
     // Animation
+    order: ElementOrder,
     color: Color32,
     border_color: Color32,
     layout_position: Pos2,
@@ -79,6 +110,7 @@ impl Default for Element {
             value: Value::default(),
             string: None,
             // Animation
+            order: ElementOrder::Normal,
             color: Color32::TRANSPARENT,
             border_color: Color32::TRANSPARENT,
             layout_position: Pos2::new(0f32, 0f32),
@@ -213,6 +245,36 @@ impl RegVisualizer {
         self.elements.values().any(|vec| vec.iter().any(|els| els.iter().any(|el| el.animating))) ||
             self.animation_elements.values().any(|vec| vec.iter().any(|els| els.iter().any(|el| el.animating)))
     }
+}
+
+macro_rules! show_element {
+    ($ui:expr, $element:expr, $low_layer_id:expr, $middle_layer_id:expr, $high_layer_id:expr, $top_layer_id:expr) => {
+        match $element.order {
+            ElementOrder::Normal => {
+                $element.show($ui);
+            }
+            ElementOrder::Low => {
+                $ui.with_layer_id($low_layer_id, |ui| {
+                    $element.show(ui);
+                });
+            }
+            ElementOrder::Middle => {
+                $ui.with_layer_id($middle_layer_id, |ui| {
+                    $element.show(ui);
+                });
+            }
+            ElementOrder::High => {
+                $ui.with_layer_id($high_layer_id, |ui| {
+                    $element.show(ui);
+                });
+            }
+            ElementOrder::Top => {
+                $ui.with_layer_id($top_layer_id, |ui| {
+                    $element.show(ui);
+                });
+            }
+        }
+    };
 }
 
 impl RegVisualizer {
@@ -381,15 +443,18 @@ impl RegVisualizer {
             });
         });
         // Show Elements
+        let low_layer_id = LayerId::new(Order::Middle, Id::new("register_visualizer_animation_elements_low"));
+        let middle_layer_id = LayerId::new(Order::Foreground, Id::new("register_visualizer_animation_elements_middle"));
+        let high_layer_id = LayerId::new(Order::Tooltip, Id::new("register_visualizer_animation_elements_high"));
+        let top_layer_id = LayerId::new(Order::Debug, Id::new("register_visualizer_animation_elements_top"));
         self.elements.iter().for_each(|(_, vec)| {
             vec.iter().for_each(|elements| {
                 elements.iter().for_each(|element| {
-                    element.show(ui);
+                    show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
                 });
             });
         });
         // Show Animation Elements
-        let animation_layer_id = LayerId::new(Order::Foreground, Id::new("register_visualizer_animation_elements"));
         self.animation_elements.iter().for_each(|((reg, loc), vec)| {
             if let Some(config) = self.animation_config.get(reg) {
                 if config.show_element {
@@ -398,13 +463,7 @@ impl RegVisualizer {
                             if *loc == LayoutLocation::TOP {
                                 vec.iter().for_each(|elements| {
                                     elements.iter().for_each(|element| {
-                                        if element.animating {
-                                            ui.with_layer_id(animation_layer_id, |ui| {
-                                                element.show(ui);
-                                            });
-                                        } else {
-                                            element.show(ui);
-                                        }
+                                        show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
                                     });
                                 });
                             }
@@ -413,13 +472,7 @@ impl RegVisualizer {
                             if *loc == LayoutLocation::BOTTOM {
                                 vec.iter().for_each(|elements| {
                                     elements.iter().for_each(|element| {
-                                        if element.animating {
-                                            ui.with_layer_id(animation_layer_id, |ui| {
-                                                element.show(ui);
-                                            });
-                                        } else {
-                                            element.show(ui);
-                                        }
+                                        show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
                                     });
                                 });
                             }
@@ -428,13 +481,7 @@ impl RegVisualizer {
                             if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
                                 vec.iter().for_each(|elements| {
                                     elements.iter().for_each(|element| {
-                                        if element.animating {
-                                            ui.with_layer_id(animation_layer_id, |ui| {
-                                                element.show(ui);
-                                            });
-                                        } else {
-                                            element.show(ui);
-                                        }
+                                        show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
                                     });
                                 });
                             }
@@ -508,26 +555,76 @@ impl RegAnimationConfig {
 }
 
 impl RegVisualizer {
-    pub fn create_animation_layout(&mut self, reg: Register, location: LayoutLocation) {
-        self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location));
+    pub fn create_animation_layout(&mut self, reg: &Register, location: LayoutLocation) {
+        self.animation_config.insert(reg.clone(), RegAnimationConfig::default().with_location(location));
     }
-    pub fn create_animation_layout_with_repeat_numbers(&mut self, reg: Register, location: LayoutLocation, repeat_numbers: (usize, usize)) {
-        self.animation_config.insert(reg, RegAnimationConfig::default().with_location(location).with_repeat_numbers(repeat_numbers));
+    pub fn create_animation_layout_with_repeat_numbers(&mut self, reg: &Register, location: LayoutLocation, repeat_numbers: (usize, usize)) {
+        self.animation_config.insert(reg.clone(), RegAnimationConfig::default().with_location(location).with_repeat_numbers(repeat_numbers));
     }
-    pub fn remove_animation_layout(&mut self, reg: Register) {
-        self.animation_config.remove(&reg);
+    pub fn remove_animation_layout(&mut self, reg: &Register) {
+        self.animation_config.remove(reg);
     }
-    pub fn start_show_animation_elements(&mut self, reg: Register) {
-        if let Some(config) = self.animation_config.get_mut(&reg) {
+    pub fn change_animation_elements_layer_with_number(&mut self, key: &(Register, LayoutLocation), number: usize, layer_order: ElementOrder) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() {
+                elements_vec[number].iter_mut().for_each(|element| {
+                    element.order = layer_order;
+                });
+            }
+        }
+    }
+    pub fn reset_animation_elements_layer_with_number(&mut self, key: &(Register, LayoutLocation), number: usize) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() {
+                elements_vec[number].iter_mut().for_each(|element| {
+                    element.order = ElementOrder::Normal;
+                });
+            }
+        }
+    }
+    pub fn change_animation_elements_layer(&mut self, key: &(Register, LayoutLocation), layer_order: ElementOrder) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            elements_vec.iter_mut().for_each(|elements| {
+                elements.iter_mut().for_each(|element| {
+                    element.order = layer_order;
+                });
+            });
+        }
+    }
+    pub fn reset_animation_elements_layer(&mut self, key: &(Register, LayoutLocation)) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            elements_vec.iter_mut().for_each(|elements| {
+                elements.iter_mut().for_each(|element| {
+                    element.order = ElementOrder::Normal;
+                });
+            });
+        }
+    }
+    pub fn change_animation_elements_layer_with_number_index(&mut self, key: &(Register, LayoutLocation), number: usize, index:usize, layer_order: ElementOrder) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() && index < elements_vec[0].len() {
+                elements_vec[number][index].order = layer_order;
+            }
+        }
+    }
+    pub fn reset_animation_elements_layer_with_number_index(&mut self, key: &(Register, LayoutLocation), number: usize, index:usize) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() && index < elements_vec[0].len() {
+                elements_vec[number][index].order = ElementOrder::Normal;
+            }
+        }
+    }
+    pub fn start_show_animation_elements(&mut self, reg: &Register) {
+        if let Some(config) = self.animation_config.get_mut(reg) {
             config.show_element = true;
         }
     }
-    pub fn start_show_animation_elements_with_anime(&mut self, reg: Register) {
-        if let Some(config) = self.animation_config.get_mut(&reg) {
+    pub fn start_show_animation_elements_with_anime(&mut self, reg: &Register) {
+        if let Some(config) = self.animation_config.get_mut(reg) {
             match config.location {
                 LayoutLocation::TOP => {
                     if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
-                        if let Some(layout) = self.layout_data.get(&reg) {
+                        if let Some(layout) = self.layout_data.get(reg) {
                             elements_vec.iter_mut().for_each(|elements| {
                                 if elements.len() == layout[0].len() {
                                     elements.iter_mut().enumerate().for_each(|(index, element)| {
@@ -540,7 +637,7 @@ impl RegVisualizer {
                 }
                 LayoutLocation::BOTTOM => {
                     if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
-                        if let Some(layout) = self.layout_data.get(&reg) {
+                        if let Some(layout) = self.layout_data.get(reg) {
                             elements_vec.iter_mut().for_each(|elements| {
                                 if elements.len() == layout[0].len() {
                                     elements.iter_mut().enumerate().for_each(|(index, element)| {
@@ -553,7 +650,7 @@ impl RegVisualizer {
                 }
                 LayoutLocation::BOTH => {
                     if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
-                        if let Some(layout) = self.layout_data.get(&reg) {
+                        if let Some(layout) = self.layout_data.get(reg) {
                             elements_vec.iter_mut().for_each(|elements| {
                                 if elements.len() == layout[0].len() {
                                     elements.iter_mut().enumerate().for_each(|(index, element)| {
@@ -564,7 +661,7 @@ impl RegVisualizer {
                         }
                     }
                     if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
-                        if let Some(layout) = self.layout_data.get(&reg) {
+                        if let Some(layout) = self.layout_data.get(reg) {
                             elements_vec.iter_mut().for_each(|elements| {
                                 if elements.len() == layout[0].len() {
                                     elements.iter_mut().enumerate().for_each(|(index, element)| {
