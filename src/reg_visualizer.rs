@@ -250,7 +250,8 @@ impl RegVisualizer {
     fn create_elements<T: Hash + Clone + Eq + PartialEq>(values: &Vec<Value>, key: &T, reg: &Register, layout_data: &HashMap<T, Vec<Vec<(Pos2, Vec2)>>>, elements: &mut HashMap<T, Vec<Vec<Element>>>) {
         let values_changed = if let Some(layout_vec) = layout_data.get(key) {
             if let Some(elements_vec) = elements.get(key) {
-                layout_vec[0].len() != elements_vec[0].len()
+                layout_vec[0].len() != elements_vec[0].len() ||
+                    elements_vec[0].iter().enumerate().any(|(index, element)| element.value != values[index])
             } else {
                 false
             }
