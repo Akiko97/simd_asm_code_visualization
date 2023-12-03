@@ -191,6 +191,12 @@ impl App for APP {
                 if ui.button("Start With Anime BOTTOM 2").clicked() {
                     self.register_visualizer.start_show_animation_elements_with_anime(Register::vector(VecRegName::YMM, 1));
                 }
+                if ui.button("Add String").clicked() {
+                    self.register_visualizer.set_string_for_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2, String::from("Test"));
+                }
+                if ui.button("Remove String").clicked() {
+                    self.register_visualizer.remove_string_from_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2);
+                }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt

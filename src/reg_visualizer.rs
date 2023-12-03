@@ -139,7 +139,7 @@ impl Element {
         loop {
             let galley = ui.painter().layout_no_wrap(
                 if let Some(text) = &self.string {
-                    text.clone()
+                    format!("{}", text)
                 } else {
                     format!("{}", self.value)
                 },
@@ -158,7 +158,11 @@ impl Element {
         // Display Text
         let text_pos = self.position + rect_size / 2.0 - Vec2::new(text_size / 2.0, font_size / 2.0);
         let galley = ui.painter().layout_no_wrap(
-            format!("{}", self.value),
+            if let Some(text) = &self.string {
+                format!("{}", text)
+            } else {
+                format!("{}", self.value)
+            },
             egui::FontId::new(font_size, egui::FontFamily::Monospace),
             Color32::BLACK,
         );
@@ -561,6 +565,38 @@ impl RegVisualizer {
                 LayoutLocation::None => {}
             }
             config.show_element = true;
+        }
+    }
+    pub fn set_string_for_animation_element(&mut self, key: &(Register, LayoutLocation), number: usize, index: usize, str: String) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() && index < elements_vec[0].len() {
+                elements_vec[number][index].string = Some(str);
+            }
+        }
+    }
+    pub fn remove_string_from_animation_element(&mut self, key: &(Register, LayoutLocation), number: usize, index: usize) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() && index < elements_vec[0].len() {
+                elements_vec[number][index].string = None;
+            }
+        }
+    }
+    pub fn set_string_for_animation_elements(&mut self, key: &(Register, LayoutLocation), number: usize, str_vec: Vec<String>) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() && str_vec.len() == elements_vec[0].len() {
+                (0..str_vec.len()).for_each(|index| {
+                    elements_vec[number][index].string = Some(str_vec[index].clone());
+                });
+            }
+        }
+    }
+    pub fn remove_string_from_animation_elements(&mut self, key: &(Register, LayoutLocation), number: usize) {
+        if let Some(elements_vec) = self.animation_elements.get_mut(key) {
+            if number < elements_vec.len() {
+                elements_vec[number].iter_mut().for_each(|element| {
+                    element.string = None;
+                });
+            }
         }
     }
 }
