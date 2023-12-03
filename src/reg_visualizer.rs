@@ -89,7 +89,7 @@ impl ElementOrder {
     }
 }
 
-struct Element {
+pub struct Element {
     // Data
     value: Value,
     string: Option<String>,
@@ -101,6 +101,8 @@ struct Element {
     position: Pos2,
     target_position: Pos2,
     animating: bool,
+    // Callback
+    animation_finished_callback: Option<Box<dyn FnOnce(&mut Self)>>,
 }
 
 impl Default for Element {
@@ -117,6 +119,8 @@ impl Default for Element {
             position: Pos2::new(0f32, 0f32),
             target_position: Pos2::new(0f32, 0f32),
             animating: false,
+            // Callback
+            animation_finished_callback: None,
         }
     }
 }
@@ -147,6 +151,15 @@ impl Element {
             border_color,
             ..self
         }
+    }
+}
+
+impl Element {
+    pub fn set_animation_finished_callback<F>(&mut self, callback: F)
+        where
+            F: FnOnce(&mut Self) + 'static,
+    {
+        self.animation_finished_callback = Some(Box::new(callback));
     }
 }
 
@@ -209,10 +222,23 @@ impl Element {
         } else {
             self.position = self.target_position;
             self.animating = false;
+            // Run callback
+            if let Some(callback) = self.animation_finished_callback.take() {
+                callback(self);
+            }
         }
     }
     pub fn set_target_position(&mut self, target: Pos2) {
         self.target_position = target;
+    }
+}
+
+impl Element {
+    pub fn set_string(&mut self, str: String) {
+        self.string = Some(str);
+    }
+    pub fn reset_string(&mut self) {
+        self.string = None;
     }
 }
 
@@ -709,7 +735,10 @@ impl RegVisualizer {
             }
         }
     }
-    pub fn move_animation(&mut self, source: (Register, LayoutLocation, usize, usize), target: (Register, LayoutLocation, usize, usize), is_layout: bool) {
+    pub fn move_animation<F>(&mut self, source: (Register, LayoutLocation, usize, usize), target: (Register, LayoutLocation, usize, usize), is_layout: bool, callback: F)
+        where
+            F: FnOnce(&mut Element) + 'static,
+    {
         let mut error = false;
         let target_pos = if let Some(elements_vec) = self.animation_elements.get(&(target.0, target.1)) {
             if target.2 < elements_vec.len() && target.3 < elements_vec[0].len() {
@@ -733,7 +762,7 @@ impl RegVisualizer {
             if source.2 < elements_vec.len() && source.3 < elements_vec[0].len() {
                 elements_vec[source.2][source.3].target_position = target_pos;
                 // TODO: change layer order
-                // Callback Here
+                elements_vec[source.2][source.3].set_animation_finished_callback(callback);
             }
         }
     }
