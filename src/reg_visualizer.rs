@@ -381,55 +381,68 @@ impl RegVisualizer {
             });
         });
         // Show Elements
-        let layer_id = LayerId::new(Order::Middle, Id::new("register_visualizer_elements"));
-        ui.with_layer_id(layer_id, |ui| {
-            self.elements.iter().for_each(|(_, vec)| {
-                vec.iter().for_each(|elements| {
-                    elements.iter().for_each(|element| {
-                        element.show(ui);
-                    });
+        self.elements.iter().for_each(|(_, vec)| {
+            vec.iter().for_each(|elements| {
+                elements.iter().for_each(|element| {
+                    element.show(ui);
                 });
             });
         });
         // Show Animation Elements
         let animation_layer_id = LayerId::new(Order::Foreground, Id::new("register_visualizer_animation_elements"));
-        ui.with_layer_id(animation_layer_id, |ui| {
-            self.animation_elements.iter().for_each(|((reg, loc), vec)| {
-                if let Some(config) = self.animation_config.get(reg) {
-                    if config.show_element {
-                        match config.location {
-                            LayoutLocation::TOP => {
-                                if *loc == LayoutLocation::TOP {
-                                    vec.iter().for_each(|elements| {
-                                        elements.iter().for_each(|element| {
+        self.animation_elements.iter().for_each(|((reg, loc), vec)| {
+            if let Some(config) = self.animation_config.get(reg) {
+                if config.show_element {
+                    match config.location {
+                        LayoutLocation::TOP => {
+                            if *loc == LayoutLocation::TOP {
+                                vec.iter().for_each(|elements| {
+                                    elements.iter().for_each(|element| {
+                                        if element.animating {
+                                            ui.with_layer_id(animation_layer_id, |ui| {
+                                                element.show(ui);
+                                            });
+                                        } else {
                                             element.show(ui);
-                                        });
+                                        }
                                     });
-                                }
+                                });
                             }
-                            LayoutLocation::BOTTOM => {
-                                if *loc == LayoutLocation::BOTTOM {
-                                    vec.iter().for_each(|elements| {
-                                        elements.iter().for_each(|element| {
-                                            element.show(ui);
-                                        });
-                                    });
-                                }
-                            }
-                            LayoutLocation::BOTH => {
-                                if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
-                                    vec.iter().for_each(|elements| {
-                                        elements.iter().for_each(|element| {
-                                            element.show(ui);
-                                        });
-                                    });
-                                }
-                            }
-                            LayoutLocation::None => {}
                         }
+                        LayoutLocation::BOTTOM => {
+                            if *loc == LayoutLocation::BOTTOM {
+                                vec.iter().for_each(|elements| {
+                                    elements.iter().for_each(|element| {
+                                        if element.animating {
+                                            ui.with_layer_id(animation_layer_id, |ui| {
+                                                element.show(ui);
+                                            });
+                                        } else {
+                                            element.show(ui);
+                                        }
+                                    });
+                                });
+                            }
+                        }
+                        LayoutLocation::BOTH => {
+                            if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
+                                vec.iter().for_each(|elements| {
+                                    elements.iter().for_each(|element| {
+                                        if element.animating {
+                                            ui.with_layer_id(animation_layer_id, |ui| {
+                                                element.show(ui);
+                                            });
+                                        } else {
+                                            element.show(ui);
+                                        }
+                                    });
+                                });
+                            }
+                        }
+                        LayoutLocation::None => {}
                     }
                 }
-            });
+            }
         });
     }
 }
