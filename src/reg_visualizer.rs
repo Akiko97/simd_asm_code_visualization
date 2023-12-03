@@ -709,4 +709,32 @@ impl RegVisualizer {
             }
         }
     }
+    pub fn move_animation(&mut self, source: (Register, LayoutLocation, usize, usize), target: (Register, LayoutLocation, usize, usize), is_layout: bool) {
+        let mut error = false;
+        let target_pos = if let Some(elements_vec) = self.animation_elements.get(&(target.0, target.1)) {
+            if target.2 < elements_vec.len() && target.3 < elements_vec[0].len() {
+                if is_layout {
+                    elements_vec[target.2][target.3].layout_position
+                } else {
+                    elements_vec[target.2][target.3].position
+                }
+            } else {
+                error = true;
+                Pos2::new(0f32, 0f32)
+            }
+        } else {
+            error = true;
+            Pos2::new(0f32, 0f32)
+        };
+        if error {
+            return;
+        }
+        if let Some(elements_vec) = self.animation_elements.get_mut(&(source.0, source.1)) {
+            if source.2 < elements_vec.len() && source.3 < elements_vec[0].len() {
+                elements_vec[source.2][source.3].target_position = target_pos;
+                // TODO: change layer order
+                // Callback Here
+            }
+        }
+    }
 }

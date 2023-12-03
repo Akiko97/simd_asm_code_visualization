@@ -197,6 +197,9 @@ impl App for APP {
                 if ui.button("Remove String").clicked() {
                     self.register_visualizer.remove_string_from_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2);
                 }
+                if ui.button("Move").clicked() {
+                    self.register_visualizer.move_animation((Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0), (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0), false);
+                }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt
