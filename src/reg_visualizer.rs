@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Mutex;
 use eframe::egui::{self, Vec2, Pos2, Ui, Color32};
 use super::*;
 
@@ -740,7 +741,7 @@ impl RegVisualizer {
 pub struct ElementAnimationData {
     pub source: (Register, LayoutLocation, usize, usize),
     pub target: (Register, LayoutLocation, usize, usize),
-    pub callback: Option<Box<dyn FnOnce(&mut Element) + Send>>,
+    pub callback: Option<Box<dyn FnOnce(&mut Element) + Send + 'static>>,
 }
 
 impl ElementAnimationData {
@@ -760,7 +761,7 @@ impl ElementAnimationData {
 impl RegVisualizer {
     pub fn move_animation<F>(&mut self, data: ElementAnimationData, is_layout: bool, callback: F)
         where
-            F: FnOnce(&mut Element) + 'static,
+            F: FnOnce() + 'static,
     {
         let mut error = false;
 
@@ -809,14 +810,36 @@ impl RegVisualizer {
                 if let Some(callback_in_data) = data.callback {
                     elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|element| {
                         callback_in_data(element);
-                        callback(element);
+                        callback();
                     });
                 } else {
                     elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|element| {
-                        callback(element);
+                        callback();
                     });
                 }
             }
+        }
+    }
+    pub fn group_move_animation<F>(&mut self, data_vec: Vec<ElementAnimationData>, is_layout: bool, callback: F)
+        where
+            F: FnMut() + Send + 'static,
+    {
+        let total_animations = data_vec.len();
+        let completed_animations = Arc::new(Mutex::new(0));
+        let shared_callback = Arc::new(Mutex::new(Some(callback)));
+        for data in data_vec.into_iter() {
+            let completed_animations_clone = Arc::clone(&completed_animations);
+            let shared_callback_clone = Arc::clone(&shared_callback);
+            self.move_animation(data, is_layout, move || {
+                let mut callback = shared_callback_clone.lock().unwrap();
+                let mut completed_animations = completed_animations_clone.lock().unwrap();
+                *completed_animations += 1;
+                if *completed_animations == total_animations {
+                    if let Some(mut callback) = callback.take() {
+                        callback();
+                    }
+                }
+            });
         }
     }
 }

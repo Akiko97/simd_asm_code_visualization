@@ -202,9 +202,28 @@ impl App for APP {
                         ElementAnimationData::new((Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0),
                                                   (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0),
                                                   |element| { element.set_string("999+999".into()); })
-                        , false, |element| {
+                        , false, || {
                             println!("Complete");
                     });
+                }
+                if ui.button("Group Move").clicked() {
+                    self.register_visualizer
+                        .group_move_animation(
+                            vec![
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTTOM, 0, 0),
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
+                                    |element| { element.set_string("1Success".into()); }
+                                ),
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
+                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 2),
+                                    |element| { element.set_string("2Success".into()); }
+                                ),
+                            ],
+                            false,
+                            || { println!("Complete"); }
+                        );
                 }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
