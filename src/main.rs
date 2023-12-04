@@ -198,8 +198,8 @@ impl App for APP {
                     self.register_visualizer.remove_string_from_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2);
                 }
                 if ui.button("Move").clicked() {
-                    self.register_visualizer.move_animation((Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0), (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0), false, |element| {
-                        element.set_string("Test".into());
+                    self.register_visualizer.move_animation((Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0), (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0), false, |element| {
+                        element.set_string("999+999".into());
                     });
                 }
                 // Show the register visualizer

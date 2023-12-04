@@ -59,7 +59,7 @@ fn get_border_color(reg: &String) -> Color32 {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum ElementOrder {
     Normal,        // None
     Low,           // Middle
@@ -740,28 +740,30 @@ impl RegVisualizer {
             F: FnOnce(&mut Element) + 'static,
     {
         let mut error = false;
-        let target_pos = if let Some(elements_vec) = self.animation_elements.get(&(target.0, target.1)) {
+        let target_data = if let Some(elements_vec) = self.animation_elements.get(&(target.0, target.1)) {
             if target.2 < elements_vec.len() && target.3 < elements_vec[0].len() {
                 if is_layout {
-                    elements_vec[target.2][target.3].layout_position
+                    (elements_vec[target.2][target.3].layout_position, elements_vec[target.2][target.3].order)
                 } else {
-                    elements_vec[target.2][target.3].position
+                    (elements_vec[target.2][target.3].position, elements_vec[target.2][target.3].order)
                 }
             } else {
                 error = true;
-                Pos2::new(0f32, 0f32)
+                (Pos2::new(0f32, 0f32), ElementOrder::Normal)
             }
         } else {
             error = true;
-            Pos2::new(0f32, 0f32)
+            (Pos2::new(0f32, 0f32), ElementOrder::Normal)
         };
         if error {
             return;
         }
         if let Some(elements_vec) = self.animation_elements.get_mut(&(source.0, source.1)) {
             if source.2 < elements_vec.len() && source.3 < elements_vec[0].len() {
-                elements_vec[source.2][source.3].target_position = target_pos;
-                // TODO: change layer order
+                elements_vec[source.2][source.3].target_position = target_data.0;
+                if elements_vec[source.2][source.3].order <= target_data.1 {
+                    elements_vec[source.2][source.3].order = target_data.1.get_higher();
+                }
                 elements_vec[source.2][source.3].set_animation_finished_callback(callback);
             }
         }
