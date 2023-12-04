@@ -103,7 +103,7 @@ pub struct Element {
     target_position: Pos2,
     animating: bool,
     // Callback
-    animation_finished_callback: Option<Box<dyn FnOnce(&mut Self)>>,
+    animation_finished_callback: Option<Box<dyn FnOnce(&mut Self) + Send + 'static>>,
 }
 
 impl Default for Element {
@@ -158,7 +158,7 @@ impl Element {
 impl Element {
     pub fn set_animation_finished_callback<F>(&mut self, callback: F)
         where
-            F: FnOnce(&mut Self) + 'static,
+            F: FnOnce(&mut Self) + Send + 'static,
     {
         self.animation_finished_callback = Some(Box::new(callback));
     }
@@ -761,7 +761,7 @@ impl ElementAnimationData {
 impl RegVisualizer {
     pub fn move_animation<F>(&mut self, data: ElementAnimationData, is_layout: bool, callback: F)
         where
-            F: FnOnce() + 'static,
+            F: FnOnce() + Send + 'static,
     {
         let mut error = false;
 

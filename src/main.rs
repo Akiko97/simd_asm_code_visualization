@@ -222,7 +222,9 @@ impl App for APP {
                                 ),
                             ],
                             false,
-                            || { println!("Complete"); }
+                            || {
+                                println!("Complete");
+                            }
                         );
                 }
                 // Show the register visualizer
