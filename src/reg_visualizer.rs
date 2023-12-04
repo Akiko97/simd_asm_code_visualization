@@ -737,32 +737,65 @@ impl RegVisualizer {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct AnimationGroup {
+pub struct ElementAnimationData {
     pub source: (Register, LayoutLocation, usize, usize),
     pub target: (Register, LayoutLocation, usize, usize),
+    pub callback: Option<Box<dyn FnOnce(&mut Element) + Send>>,
+}
+
+impl ElementAnimationData {
+    pub fn new(
+        source: (Register, LayoutLocation, usize, usize),
+        target: (Register, LayoutLocation, usize, usize),
+        callback: impl FnOnce(&mut Element) + Send + 'static
+    ) -> Self {
+        ElementAnimationData {
+            source,
+            target,
+            callback: Some(Box::new(callback)),
+        }
+    }
 }
 
 impl RegVisualizer {
-    pub fn move_animation<F>(&mut self, data: AnimationGroup, is_layout: bool, callback: F)
+    pub fn move_animation<F>(&mut self, data: ElementAnimationData, is_layout: bool, callback: F)
         where
             F: FnOnce(&mut Element) + 'static,
     {
         let mut error = false;
-        let target_data = if let Some(elements_vec) = self.animation_elements.get(&(data.target.0, data.target.1)) {
-            if data.target.2 < elements_vec.len() && data.target.3 < elements_vec[0].len() {
-                if is_layout {
-                    (elements_vec[data.target.2][data.target.3].layout_position, elements_vec[data.target.2][data.target.3].order)
+
+        let target_data = if data.target.1 == LayoutLocation::None && data.target.2 == 0 {
+            if let Some(elements_vec) = self.elements.get(&data.target.0) {
+                if data.target.3 < elements_vec[0].len() {
+                    if is_layout {
+                        (elements_vec[0][data.target.3].layout_position, elements_vec[0][data.target.3].order)
+                    } else {
+                        (elements_vec[0][data.target.3].position, elements_vec[0][data.target.3].order)
+                    }
                 } else {
-                    (elements_vec[data.target.2][data.target.3].position, elements_vec[data.target.2][data.target.3].order)
+                    error = true;
+                    (Pos2::new(0f32, 0f32), ElementOrder::Normal)
                 }
             } else {
                 error = true;
                 (Pos2::new(0f32, 0f32), ElementOrder::Normal)
             }
         } else {
-            error = true;
-            (Pos2::new(0f32, 0f32), ElementOrder::Normal)
+            if let Some(elements_vec) = self.animation_elements.get(&(data.target.0, data.target.1)) {
+                if data.target.2 < elements_vec.len() && data.target.3 < elements_vec[0].len() {
+                    if is_layout {
+                        (elements_vec[data.target.2][data.target.3].layout_position, elements_vec[data.target.2][data.target.3].order)
+                    } else {
+                        (elements_vec[data.target.2][data.target.3].position, elements_vec[data.target.2][data.target.3].order)
+                    }
+                } else {
+                    error = true;
+                    (Pos2::new(0f32, 0f32), ElementOrder::Normal)
+                }
+            } else {
+                error = true;
+                (Pos2::new(0f32, 0f32), ElementOrder::Normal)
+            }
         };
         if error {
             return;
@@ -773,7 +806,16 @@ impl RegVisualizer {
                 if elements_vec[data.source.2][data.source.3].order <= target_data.1 {
                     elements_vec[data.source.2][data.source.3].order = target_data.1.get_higher();
                 }
-                elements_vec[data.source.2][data.source.3].set_animation_finished_callback(callback);
+                if let Some(callback_in_data) = data.callback {
+                    elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|element| {
+                        callback_in_data(element);
+                        callback(element);
+                    });
+                } else {
+                    elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|element| {
+                        callback(element);
+                    });
+                }
             }
         }
     }
