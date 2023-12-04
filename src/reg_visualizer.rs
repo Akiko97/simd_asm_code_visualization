@@ -735,17 +735,26 @@ impl RegVisualizer {
             }
         }
     }
-    pub fn move_animation<F>(&mut self, source: (Register, LayoutLocation, usize, usize), target: (Register, LayoutLocation, usize, usize), is_layout: bool, callback: F)
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub struct AnimationGroup {
+    pub source: (Register, LayoutLocation, usize, usize),
+    pub target: (Register, LayoutLocation, usize, usize),
+}
+
+impl RegVisualizer {
+    pub fn move_animation<F>(&mut self, data: AnimationGroup, is_layout: bool, callback: F)
         where
             F: FnOnce(&mut Element) + 'static,
     {
         let mut error = false;
-        let target_data = if let Some(elements_vec) = self.animation_elements.get(&(target.0, target.1)) {
-            if target.2 < elements_vec.len() && target.3 < elements_vec[0].len() {
+        let target_data = if let Some(elements_vec) = self.animation_elements.get(&(data.target.0, data.target.1)) {
+            if data.target.2 < elements_vec.len() && data.target.3 < elements_vec[0].len() {
                 if is_layout {
-                    (elements_vec[target.2][target.3].layout_position, elements_vec[target.2][target.3].order)
+                    (elements_vec[data.target.2][data.target.3].layout_position, elements_vec[data.target.2][data.target.3].order)
                 } else {
-                    (elements_vec[target.2][target.3].position, elements_vec[target.2][target.3].order)
+                    (elements_vec[data.target.2][data.target.3].position, elements_vec[data.target.2][data.target.3].order)
                 }
             } else {
                 error = true;
@@ -758,13 +767,13 @@ impl RegVisualizer {
         if error {
             return;
         }
-        if let Some(elements_vec) = self.animation_elements.get_mut(&(source.0, source.1)) {
-            if source.2 < elements_vec.len() && source.3 < elements_vec[0].len() {
-                elements_vec[source.2][source.3].target_position = target_data.0;
-                if elements_vec[source.2][source.3].order <= target_data.1 {
-                    elements_vec[source.2][source.3].order = target_data.1.get_higher();
+        if let Some(elements_vec) = self.animation_elements.get_mut(&(data.source.0, data.source.1)) {
+            if data.source.2 < elements_vec.len() && data.source.3 < elements_vec[0].len() {
+                elements_vec[data.source.2][data.source.3].target_position = target_data.0;
+                if elements_vec[data.source.2][data.source.3].order <= target_data.1 {
+                    elements_vec[data.source.2][data.source.3].order = target_data.1.get_higher();
                 }
-                elements_vec[source.2][source.3].set_animation_finished_callback(callback);
+                elements_vec[data.source.2][data.source.3].set_animation_finished_callback(callback);
             }
         }
     }

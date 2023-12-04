@@ -15,6 +15,7 @@ mod utilities;
 use reg_visualizer::{RegVisualizer, LayoutLocation};
 use visualizer_setting::{VisualizerSetting};
 use utilities::*;
+use crate::reg_visualizer::AnimationGroup;
 
 struct RegVisualizerData {
     // Registers Data
@@ -198,7 +199,10 @@ impl App for APP {
                     self.register_visualizer.remove_string_from_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2);
                 }
                 if ui.button("Move").clicked() {
-                    self.register_visualizer.move_animation((Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0), (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0), false, |element| {
+                    self.register_visualizer.move_animation(AnimationGroup {
+                        source: (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0),
+                        target: (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0),
+                    }, false, |element| {
                         element.set_string("999+999".into());
                     });
                 }
