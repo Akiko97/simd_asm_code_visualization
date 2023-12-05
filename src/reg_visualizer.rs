@@ -690,6 +690,7 @@ impl RegVisualizer {
         }
     }
     pub fn start_show_animation_elements_with_anime(&mut self, reg: &Register) {
+        // TODO: add callback, change RegV struct in main.rc to Arc<Mutex<~>>
         if let Some(config) = self.animation_config.get_mut(reg) {
             match config.location {
                 LayoutLocation::TOP => {
