@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::thread::sleep;
 use eframe::{App, Frame, NativeOptions};
 use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel, Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Shape, Rect, epaint, Label, Slider, ComboBox, Color32};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 mod reg_visualizer;
 mod visualizer_setting;
 mod utilities;
@@ -222,9 +222,7 @@ impl App for APP {
                                 ),
                             ],
                             false,
-                            || {
-                                println!("Complete");
-                            }
+                            move || { println!("Complete"); }
                         );
                 }
                 // Show the register visualizer
