@@ -225,12 +225,39 @@ impl App for APP {
                             move || { println!("Complete"); }
                         );
                 }
+                if ui.button("Sequence").clicked() {
+                    self.register_visualizer.set_group_move_animation_sequence(
+                        Arc::new(Mutex::new(vec![
+                            (vec![
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTTOM, 0, 0),
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
+                                    |element| { element.set_string("1Success".into()); }
+                                ),
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
+                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 2),
+                                    |element| { element.set_string("2Success".into()); }
+                                ),
+                            ], false),
+                            (vec![
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0),
+                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0),
+                                    |element| { element.set_string("3Success".into()); }
+                                ),
+                            ], false),
+                        ]))
+                    );
+                    self.register_visualizer.start_move_animation_sequence();
+                }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt
                 });
                 self.register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
                 self.register_visualizer.show(ui, &self.reg_visualizer_data, &self.cpu);
+                self.register_visualizer.move_animation_sequence();
                 if self.register_visualizer.is_animating() {
                     ctx.request_repaint();
                 }

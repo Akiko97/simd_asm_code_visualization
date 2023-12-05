@@ -3,6 +3,8 @@ use std::hash::Hash;
 use std::sync::Mutex;
 use eframe::egui::{self, Vec2, Pos2, Ui, Color32};
 use super::*;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 
 pub fn get_size_from_value(value: &Value) -> Vec2 {
     match value {
@@ -251,10 +253,15 @@ pub struct RegVisualizer {
     animation_config: HashMap<Register, RegAnimationConfig>,
     animation_layout_data: HashMap<(Register, LayoutLocation), Vec<Vec<(Pos2, Vec2)>>>,
     animation_elements: HashMap<(Register, LayoutLocation), Vec<Vec<Element>>>,
+    // Animation Sequence
+    sender: Sender<AnimationControlMsg>,
+    receiver: Receiver<AnimationControlMsg>,
+    sequence: Option<Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>>,
 }
 
 impl Default for RegVisualizer {
     fn default() -> Self {
+        let (sender, receiver) = mpsc::channel();
         Self {
             // Visualization Data
             layout_data: HashMap::new(),
@@ -263,6 +270,10 @@ impl Default for RegVisualizer {
             animation_config: HashMap::new(),
             animation_layout_data: HashMap::new(),
             animation_elements: HashMap::new(),
+            // Animation Sequence
+            sender,
+            receiver,
+            sequence: None,
         }
     }
 }
@@ -519,6 +530,38 @@ impl RegVisualizer {
             }
         });
     }
+    pub fn move_animation_sequence(&mut self) {
+        match self.receiver.try_recv() {
+            Ok(AnimationControlMsg::ExecuteAnimation(index)) => {
+                if self.sequence.is_none() {
+                    self.sender.send(AnimationControlMsg::Terminate).unwrap();
+                    return;
+                }
+                let sequence = self.sequence.as_ref().unwrap().clone();
+                let mut groups = sequence.lock().unwrap();
+                let length = groups.len();
+                let group = std::mem::take(&mut groups[index]);
+                let sender_clone = self.sender.clone();
+                self.group_move_animation(group.0, group.1, move || {
+                    if index + 1 < length {
+                        sender_clone.send(AnimationControlMsg::ExecuteAnimation(index + 1)).unwrap();
+                    } else {
+                        sender_clone.send(AnimationControlMsg::Terminate).unwrap();
+                    }
+                });
+            }
+            Ok(AnimationControlMsg::Terminate) => {
+                self.sequence = None;
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                /* Do nothing */
+            }
+            Err(_) => {
+                /* Error */
+                self.sequence = None;
+            }
+        }
+    }
 }
 
 // Animation
@@ -758,6 +801,11 @@ impl ElementAnimationData {
     }
 }
 
+enum AnimationControlMsg {
+    ExecuteAnimation(usize),
+    Terminate,
+}
+
 impl RegVisualizer {
     pub fn move_animation<F>(&mut self, data: ElementAnimationData, is_layout: bool, callback: F)
         where
@@ -840,6 +888,14 @@ impl RegVisualizer {
                     }
                 }
             });
+        }
+    }
+    pub fn set_group_move_animation_sequence(&mut self, sequence: Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>) {
+        self.sequence = Some(sequence);
+    }
+    pub fn start_move_animation_sequence(&self) {
+        if !self.sequence.is_none() {
+            self.sender.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
         }
     }
 }
