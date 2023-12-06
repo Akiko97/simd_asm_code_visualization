@@ -4,10 +4,10 @@
 use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName, FLAGSName, IPName};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use std::collections::HashMap;
-use std::thread::sleep;
 use eframe::{App, Frame, NativeOptions};
 use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel, Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Shape, Rect, epaint, Label, Slider, ComboBox, Color32};
 use std::sync::{Arc, Mutex};
+
 mod reg_visualizer;
 mod visualizer_setting;
 mod utilities;
@@ -229,6 +229,10 @@ impl App for APP {
                             move || { println!("Complete"); }
                         );
                 }
+                if ui.button("Add Layout").clicked() {
+                    self.register_visualizer.create_animation_layout(&Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTH);
+                    self.register_visualizer.create_animation_layout_with_repeat_numbers(&Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, (0, 2));
+                }
                 if ui.button("Sequence").clicked() {
                     self.register_visualizer.set_group_move_animation_sequence(
                         Arc::new(Mutex::new(vec![
@@ -253,7 +257,10 @@ impl App for APP {
                             ], false),
                         ]))
                     );
-                    self.register_visualizer.start_move_animation_sequence();
+                    self.register_visualizer.start_move_animation_sequence_after_start_animation(&vec![
+                        Register::vector(VecRegName::YMM, 0),
+                        Register::vector(VecRegName::YMM, 1)
+                    ]);
                 }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{

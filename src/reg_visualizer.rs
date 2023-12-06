@@ -963,4 +963,22 @@ impl RegVisualizer {
             self.sender.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
         }
     }
+    pub fn start_move_animation_sequence_after_start_animation(&mut self, regs: &Vec<Register>) {
+        let length = regs.len();
+        let mut count = Arc::new(Mutex::new(0usize));
+        let flag = self.sequence.is_none();
+        regs.iter().for_each(|reg| {
+            let count_clone = count.clone();
+            let sender_clone = self.sender.clone();
+            self.start_show_animation_elements_with_anime(reg, move || {
+                let mut count = count_clone.lock().unwrap();
+                *count += 1;
+                if *count == length {
+                    if !flag {
+                        sender_clone.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
+                    }
+                }
+            });
+        });
+    }
 }
