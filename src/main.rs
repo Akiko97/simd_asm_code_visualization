@@ -180,7 +180,9 @@ impl App for APP {
                     self.register_visualizer.start_show_animation_elements(&Register::vector(VecRegName::YMM, 0));
                 }
                 if ui.button("Start With Anime").clicked() {
-                    self.register_visualizer.start_show_animation_elements_with_anime(&Register::vector(VecRegName::YMM, 0));
+                    self.register_visualizer.start_show_animation_elements_with_anime(&Register::vector(VecRegName::YMM, 0), || {
+                        println!("Complete");
+                    });
                 }
                 if ui.button("Add BOTTOM 2").clicked() {
                     self.register_visualizer.create_animation_layout_with_repeat_numbers(&Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, (0, 2));
@@ -189,7 +191,9 @@ impl App for APP {
                     self.register_visualizer.remove_animation_layout(&Register::vector(VecRegName::YMM, 1));
                 }
                 if ui.button("Start With Anime BOTTOM 2").clicked() {
-                    self.register_visualizer.start_show_animation_elements_with_anime(&Register::vector(VecRegName::YMM, 1));
+                    self.register_visualizer.start_show_animation_elements_with_anime(&Register::vector(VecRegName::YMM, 1), || {
+                        println!("Complete");
+                    });
                 }
                 if ui.button("Add String").clicked() {
                     self.register_visualizer.set_string_for_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2, String::from("Test"));

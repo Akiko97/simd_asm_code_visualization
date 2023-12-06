@@ -689,65 +689,6 @@ impl RegVisualizer {
             config.show_element = true;
         }
     }
-    pub fn start_show_animation_elements_with_anime(&mut self, reg: &Register) {
-        // TODO: add callback, change RegV struct in main.rc to Arc<Mutex<~>>
-        if let Some(config) = self.animation_config.get_mut(reg) {
-            match config.location {
-                LayoutLocation::TOP => {
-                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
-                        if let Some(layout) = self.layout_data.get(reg) {
-                            elements_vec.iter_mut().for_each(|elements| {
-                                if elements.len() == layout[0].len() {
-                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                        element.position = layout[0][index].0;
-                                    });
-                                }
-                            });
-                        }
-                    }
-                }
-                LayoutLocation::BOTTOM => {
-                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
-                        if let Some(layout) = self.layout_data.get(reg) {
-                            elements_vec.iter_mut().for_each(|elements| {
-                                if elements.len() == layout[0].len() {
-                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                        element.position = layout[0][index].0;
-                                    });
-                                }
-                            });
-                        }
-                    }
-                }
-                LayoutLocation::BOTH => {
-                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
-                        if let Some(layout) = self.layout_data.get(reg) {
-                            elements_vec.iter_mut().for_each(|elements| {
-                                if elements.len() == layout[0].len() {
-                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                        element.position = layout[0][index].0;
-                                    });
-                                }
-                            });
-                        }
-                    }
-                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
-                        if let Some(layout) = self.layout_data.get(reg) {
-                            elements_vec.iter_mut().for_each(|elements| {
-                                if elements.len() == layout[0].len() {
-                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
-                                        element.position = layout[0][index].0;
-                                    });
-                                }
-                            });
-                        }
-                    }
-                }
-                LayoutLocation::None => {}
-            }
-            config.show_element = true;
-        }
-    }
     pub fn set_string_for_animation_element(&mut self, key: &(Register, LayoutLocation), number: usize, index: usize, str: String) {
         if let Some(elements_vec) = self.animation_elements.get_mut(key) {
             if number < elements_vec.len() && index < elements_vec[0].len() {
@@ -808,6 +749,129 @@ enum AnimationControlMsg {
 }
 
 impl RegVisualizer {
+    pub fn start_show_animation_elements_with_anime<F>(&mut self, reg: &Register, callback: F)
+        where
+            F: FnMut() + Send + 'static,
+    {
+        let complete_animation = Arc::new(Mutex::new(0usize));
+        let callback = Arc::new(Mutex::new(Some(callback)));
+        if let Some(config) = self.animation_config.get_mut(reg) {
+            match config.location {
+                LayoutLocation::TOP => {
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
+                        if let Some(layout) = self.layout_data.get(reg) {
+                            let length = elements_vec.iter().fold(0, |acc, v| acc + v.len());
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                        let complete_animation_clone = complete_animation.clone();
+                                        let callback_clone = callback.clone();
+                                        element.set_animation_finished_callback(move |_| {
+                                            let mut callback = callback_clone.lock().unwrap();
+                                            let mut complete_animation = complete_animation_clone.lock().unwrap();
+                                            *complete_animation += 1;
+                                            if *complete_animation == length {
+                                                if let Some(mut callback) = callback.take() {
+                                                    callback();
+                                                }
+                                            }
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+                LayoutLocation::BOTTOM => {
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
+                        if let Some(layout) = self.layout_data.get(reg) {
+                            let length = elements_vec.iter().fold(0, |acc, v| acc + v.len());
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                        let complete_animation_clone = complete_animation.clone();
+                                        let callback_clone = callback.clone();
+                                        element.set_animation_finished_callback(move |_| {
+                                            let mut callback = callback_clone.lock().unwrap();
+                                            let mut complete_animation = complete_animation_clone.lock().unwrap();
+                                            *complete_animation += 1;
+                                            if *complete_animation == length {
+                                                if let Some(mut callback) = callback.take() {
+                                                    callback();
+                                                }
+                                            }
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+                LayoutLocation::BOTH => {
+                    let length = if let Some(elements_vec_top) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
+                        elements_vec_top.iter().fold(0, |acc, v| acc + v.len()) +
+                            if let Some(elements_vec_bottom) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
+                                elements_vec_bottom.iter().fold(0, |acc, v| acc + v.len())
+                            } else {
+                                0
+                            }
+                    } else {
+                        0
+                    };
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::TOP)) {
+                        if let Some(layout) = self.layout_data.get(reg) {
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                        let complete_animation_clone = complete_animation.clone();
+                                        let callback_clone = callback.clone();
+                                        element.set_animation_finished_callback(move |_| {
+                                            let mut callback = callback_clone.lock().unwrap();
+                                            let mut complete_animation = complete_animation_clone.lock().unwrap();
+                                            *complete_animation += 1;
+                                            if *complete_animation == length {
+                                                if let Some(mut callback) = callback.take() {
+                                                    callback();
+                                                }
+                                            }
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    }
+                    if let Some(elements_vec) = self.animation_elements.get_mut(&(reg.clone(), LayoutLocation::BOTTOM)) {
+                        if let Some(layout) = self.layout_data.get(reg) {
+                            elements_vec.iter_mut().for_each(|elements| {
+                                if elements.len() == layout[0].len() {
+                                    elements.iter_mut().enumerate().for_each(|(index, element)| {
+                                        element.position = layout[0][index].0;
+                                        let complete_animation_clone = complete_animation.clone();
+                                        let callback_clone = callback.clone();
+                                        element.set_animation_finished_callback(move |_| {
+                                            let mut callback = callback_clone.lock().unwrap();
+                                            let mut complete_animation = complete_animation_clone.lock().unwrap();
+                                            *complete_animation += 1;
+                                            if *complete_animation == length {
+                                                if let Some(mut callback) = callback.take() {
+                                                    callback();
+                                                }
+                                            }
+                                        });
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+                LayoutLocation::None => {}
+            }
+            config.show_element = true;
+        }
+    }
     pub fn move_animation<F>(&mut self, data: ElementAnimationData, is_layout: bool, callback: F)
         where
             F: FnOnce() + Send + 'static,
@@ -862,7 +926,7 @@ impl RegVisualizer {
                         callback();
                     });
                 } else {
-                    elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|element| {
+                    elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|_| {
                         callback();
                     });
                 }
