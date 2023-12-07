@@ -257,6 +257,29 @@ impl App for APP {
                             ], false),
                         ]))
                     );
+                    self.register_visualizer.add_group_move_animation_sequence(
+                        Arc::new(Mutex::new(vec![
+                            (vec![
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTTOM, 0, 2),
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 3),
+                                    |element| { element.set_string("4Success".into()); }
+                                ),
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 3),
+                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 3),
+                                    |element| { element.set_string("5Success".into()); }
+                                ),
+                            ], false),
+                            (vec![
+                                ElementAnimationData::new(
+                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 2),
+                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 2),
+                                    |element| { element.set_string("6Success".into()); }
+                                ),
+                            ], false),
+                        ]))
+                    );
                     self.register_visualizer.start_move_animation_sequence_after_start_animation(&vec![
                         Register::vector(VecRegName::YMM, 0),
                         Register::vector(VecRegName::YMM, 1)
@@ -268,7 +291,7 @@ impl App for APP {
                 });
                 self.register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
                 self.register_visualizer.show(ui, &self.reg_visualizer_data, &self.cpu);
-                self.register_visualizer.move_animation_sequence();
+                self.register_visualizer.move_animation_sequence(ctx);
                 if self.register_visualizer.is_animating() {
                     ctx.request_repaint();
                 }

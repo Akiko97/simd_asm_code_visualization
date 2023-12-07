@@ -256,7 +256,7 @@ pub struct RegVisualizer {
     // Animation Sequence
     sender: Sender<AnimationControlMsg>,
     receiver: Receiver<AnimationControlMsg>,
-    sequence: Option<Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>>,
+    sequence: Option<Vec<Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>>>,
 }
 
 impl Default for RegVisualizer {
@@ -530,14 +530,14 @@ impl RegVisualizer {
             }
         });
     }
-    pub fn move_animation_sequence(&mut self) {
+    pub fn move_animation_sequence(&mut self, ctx: &Context) {
         match self.receiver.try_recv() {
             Ok(AnimationControlMsg::ExecuteAnimation(index)) => {
                 if self.sequence.is_none() {
                     self.sender.send(AnimationControlMsg::Terminate).unwrap();
                     return;
                 }
-                let sequence = self.sequence.as_ref().unwrap().clone();
+                let sequence = self.sequence.as_ref().unwrap()[0].clone();
                 let mut groups = sequence.lock().unwrap();
                 let length = groups.len();
                 let group = std::mem::take(&mut groups[index]);
@@ -551,7 +551,17 @@ impl RegVisualizer {
                 });
             }
             Ok(AnimationControlMsg::Terminate) => {
-                self.sequence = None;
+                if let Some(s) = self.sequence.as_deref_mut() {
+                    let mut s = s.to_vec();
+                    s.remove(0);
+                    self.sequence = Some(s.clone());
+                    if s.is_empty() {
+                        self.sequence = None;
+                    } else {
+                        self.sender.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
+                        ctx.request_repaint();
+                    }
+                }
             }
             Err(mpsc::TryRecvError::Empty) => {
                 /* Do nothing */
@@ -956,7 +966,18 @@ impl RegVisualizer {
         }
     }
     pub fn set_group_move_animation_sequence(&mut self, sequence: Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>) {
-        self.sequence = Some(sequence);
+        self.sequence = Some(vec![sequence]);
+    }
+    pub fn add_group_move_animation_sequence(&mut self, sequence: Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>) {
+        if self.sequence.is_none() {
+            self.set_group_move_animation_sequence(sequence);
+        } else {
+            if let Some(s) = self.sequence.as_deref_mut() {
+                let mut s = s.to_vec();
+                s.push(sequence);
+                self.sequence = Some(s.clone());
+            }
+        }
     }
     pub fn start_move_animation_sequence(&self) {
         if !self.sequence.is_none() {
