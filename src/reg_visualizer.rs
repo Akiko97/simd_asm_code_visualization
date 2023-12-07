@@ -731,6 +731,44 @@ impl RegVisualizer {
             }
         }
     }
+    pub fn exchange_animation_elements(&mut self, source: (Register, LayoutLocation, usize, usize), target: (Register, LayoutLocation, usize, usize)) {
+        let mut value;
+        let mut string;
+        let mut order;
+        let mut color;
+        let mut layout_position;
+        let mut position;
+        let mut target_position;
+        if let Some(source_vec) = self.animation_elements.get(&(source.0, source.1)) {
+            value = source_vec[source.2][source.3].value;
+            string = source_vec[source.2][source.3].string.clone();
+            order = source_vec[source.2][source.3].order;
+            color = source_vec[source.2][source.3].color;
+            layout_position = source_vec[source.2][source.3].layout_position;
+            position = source_vec[source.2][source.3].position;
+            target_position = source_vec[source.2][source.3].target_position;
+        } else {
+            return;
+        }
+        if let Some(target_vec) = self.animation_elements.get_mut(&(target.0, target.1)) {
+            std::mem::swap(&mut value, &mut target_vec[target.2][target.3].value);
+            std::mem::swap(&mut string, &mut target_vec[target.2][target.3].string);
+            std::mem::swap(&mut order, &mut target_vec[target.2][target.3].order);
+            std::mem::swap(&mut color, &mut target_vec[target.2][target.3].color);
+            std::mem::swap(&mut layout_position, &mut target_vec[target.2][target.3].layout_position);
+            std::mem::swap(&mut position, &mut target_vec[target.2][target.3].position);
+            std::mem::swap(&mut target_position, &mut target_vec[target.2][target.3].target_position);
+        }
+        if let Some(source_vec) = self.animation_elements.get_mut(&(source.0, source.1)) {
+            std::mem::swap(&mut value, &mut source_vec[source.2][source.3].value);
+            std::mem::swap(&mut string, &mut source_vec[source.2][source.3].string);
+            std::mem::swap(&mut order, &mut source_vec[source.2][source.3].order);
+            std::mem::swap(&mut color, &mut source_vec[source.2][source.3].color);
+            std::mem::swap(&mut layout_position, &mut source_vec[source.2][source.3].layout_position);
+            std::mem::swap(&mut position, &mut source_vec[source.2][source.3].position);
+            std::mem::swap(&mut target_position, &mut source_vec[source.2][source.3].target_position);
+        }
+    }
 }
 
 pub struct ElementAnimationData {
@@ -886,8 +924,8 @@ impl RegVisualizer {
         where
             F: FnOnce() + Send + 'static,
     {
+        // Get Target Data (Position and Order)
         let mut error = false;
-
         let target_data = if data.target.1 == LayoutLocation::None && data.target.2 == 0 {
             if let Some(elements_vec) = self.elements.get(&data.target.0) {
                 if data.target.3 < elements_vec[0].len() {
@@ -924,6 +962,7 @@ impl RegVisualizer {
         if error {
             return;
         }
+        // Next: Move Animation
         if let Some(elements_vec) = self.animation_elements.get_mut(&(data.source.0, data.source.1)) {
             if data.source.2 < elements_vec.len() && data.source.3 < elements_vec[0].len() {
                 elements_vec[data.source.2][data.source.3].target_position = target_data.0;
@@ -1002,4 +1041,59 @@ impl RegVisualizer {
             });
         });
     }
+}
+
+#[macro_export]
+macro_rules! vec_reg {
+    ($reg:ident, $idx:expr) => { Register::vector(VecRegName::$reg, $idx) };
+}
+
+#[macro_export]
+macro_rules! gpr {
+    ($reg:ident) => { Register::gpr(GPRName::$reg) };
+}
+
+#[macro_export]
+macro_rules! create_animation_data {
+    ($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr) => {
+        ElementAnimationData::new(
+            ($sr, LayoutLocation::$sl, $sli, $sri),
+            ($tr, LayoutLocation::$tl, $tli, $tri),
+            $cb
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! create_group_animation_data {
+    ($($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr),*) => {
+        vec![
+            $(
+                ElementAnimationData::new(
+                    ($sr, LayoutLocation::$sl, $sli, $sri),
+                    ($tr, LayoutLocation::$tl, $tli, $tri),
+                    $cb
+                ),
+            ),*
+        ]
+    };
+}
+
+#[macro_export]
+macro_rules! create_group_animation_data_for_register {
+    ($sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $ct:expr, $($cb:expr),*) => {
+        vec![
+            $(
+                ElementAnimationData::new(
+                    ($sr, LayoutLocation::$sl, $sli, $ct - 1 - $x),
+                    ($tr, LayoutLocation::$tl, $tli, $ct - 1 - $x),
+                    $cb
+                ),
+            ),*
+        ]
+        where
+            [(); $count]:,
+            [(); $count - 1]:,
+            $( const $x: usize = $count - 1 - $x; )*
+    };
 }
