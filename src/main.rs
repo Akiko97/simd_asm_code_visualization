@@ -1,7 +1,7 @@
 // DO NOT REMOVE - hide console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName, FLAGSName, IPName};
+use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use std::collections::HashMap;
 use eframe::{App, Frame, NativeOptions};
@@ -11,32 +11,14 @@ use std::sync::{Arc, Mutex};
 mod reg_visualizer;
 mod visualizer_setting;
 mod utilities;
+mod reg_visualizer_data;
+mod animation_fsm;
 
 use reg_visualizer::{RegVisualizer, LayoutLocation, ElementAnimationData};
 use visualizer_setting::{VisualizerSetting};
 use utilities::*;
-
-struct RegVisualizerData {
-    // Registers Data
-    registers: Vec<Vec<Register>>,
-    vector_regs_type: HashMap<(VecRegName, usize), ValueType>,
-    gprs_type: HashMap<GPRName, UIntFloat>,
-    // Animation Data
-    velocity: f32,
-}
-
-impl Default for RegVisualizerData {
-    fn default() -> Self {
-        Self {
-            // Registers Data
-            registers: vec![vec![]],
-            vector_regs_type: HashMap::new(),
-            gprs_type: HashMap::new(),
-            // Animation Data
-            velocity: 10f32,
-        }
-    }
-}
+use reg_visualizer_data::RegVisualizerData;
+use crate::animation_fsm::AnimationFSM;
 
 struct APP {
     // Data
@@ -45,6 +27,7 @@ struct APP {
     // Windows
     register_visualizer: RegVisualizer,
     visualizer_setting: VisualizerSetting,
+    animation_fsm: AnimationFSM,
     // Code Editor
     code: String,
     highlight: usize,
@@ -65,6 +48,7 @@ impl Default for APP {
             // Windows
             register_visualizer: RegVisualizer::default(),
             visualizer_setting: VisualizerSetting::default(),
+            animation_fsm: AnimationFSM::default(),
             // Code Editor
             code: "".into(),
             highlight: 0,
@@ -79,7 +63,7 @@ impl Default for APP {
 }
 
 impl App for APP {
-    fn update(&mut self, ctx: &Context, frame: &mut Frame) {
+    fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 if ui.button("Visualizer").triple_clicked() {
@@ -170,136 +154,20 @@ impl App for APP {
             .open(&mut self.show_visualizer)
             .show(ctx, |ui| {
                 // Debug
-                if ui.button("Add").clicked() {
-                    self.register_visualizer.create_animation_layout(&Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTH);
-                }
-                if ui.button("Remove").clicked() {
-                    self.register_visualizer.remove_animation_layout(&Register::vector(VecRegName::YMM, 0));
-                }
-                if ui.button("Start").clicked() {
-                    self.register_visualizer.start_show_animation_elements(&Register::vector(VecRegName::YMM, 0));
-                }
-                if ui.button("Start With Anime").clicked() {
-                    self.register_visualizer.start_show_animation_elements_with_anime(&Register::vector(VecRegName::YMM, 0), || {
-                        println!("Complete");
+                if ui.button("test").clicked() {
+                    self.animation_fsm.set_create_layout(|| {
+                        println!("1");
                     });
-                }
-                if ui.button("Add BOTTOM 2").clicked() {
-                    self.register_visualizer.create_animation_layout_with_repeat_numbers(&Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, (0, 2));
-                }
-                if ui.button("Remove BOTTOM 2").clicked() {
-                    self.register_visualizer.remove_animation_layout(&Register::vector(VecRegName::YMM, 1));
-                }
-                if ui.button("Start With Anime BOTTOM 2").clicked() {
-                    self.register_visualizer.start_show_animation_elements_with_anime(&Register::vector(VecRegName::YMM, 1), || {
-                        println!("Complete");
+                    self.animation_fsm.set_run_animation(|| {
+                        println!("2");
                     });
-                }
-                if ui.button("Add String").clicked() {
-                    self.register_visualizer.set_string_for_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2, String::from("Test"));
-                }
-                if ui.button("Remove String").clicked() {
-                    self.register_visualizer.remove_string_from_animation_element(&(Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM), 1, 2);
-                }
-                if ui.button("Move").clicked() {
-                    self.register_visualizer.move_animation(
-                        create_animation_data!(
-                            vec_reg!(YMM, 1), BOTTOM, 0, 0,
-                            vec_reg!(YMM, 1), BOTTOM, 1, 0,
-                            |element| { element.set_string("999+999".into()); }),
-                        false, || {
-                            println!("Complete");
-                        });
-                }
-                if ui.button("Group Move").clicked() {
-                    self.register_visualizer
-                        .group_move_animation(
-                            vec![
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTTOM, 0, 0),
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
-                                    |element| { element.set_string("1Success".into()); }
-                                ),
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
-                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 2),
-                                    |element| { element.set_string("2Success".into()); }
-                                ),
-                            ],
-                            false,
-                            move || { println!("Complete"); }
-                        );
-                }
-                if ui.button("Add Layout").clicked() {
-                    self.register_visualizer.create_animation_layout(&Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTH);
-                    self.register_visualizer.create_animation_layout_with_repeat_numbers(&Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, (0, 2));
-                }
-                if ui.button("Sequence").clicked() {
-                    self.register_visualizer.set_group_move_animation_sequence(
-                        Arc::new(Mutex::new(vec![
-                            (vec![
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTTOM, 0, 0),
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
-                                    |element| { element.set_string("1Success".into()); }
-                                ),
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 1),
-                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 2),
-                                    |element| { element.set_string("2Success".into()); }
-                                ),
-                            ], false),
-                            (vec![
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 0),
-                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 0),
-                                    |element| { element.set_string("3Success".into()); }
-                                ),
-                            ], false),
-                        ]))
-                    );
-                    self.register_visualizer.add_group_move_animation_sequence(
-                        Arc::new(Mutex::new(vec![
-                            (vec![
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::BOTTOM, 0, 2),
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 3),
-                                    |element| { element.set_string("4Success".into()); }
-                                ),
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 0), LayoutLocation::TOP, 0, 3),
-                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 3),
-                                    |element| { element.set_string("5Success".into()); }
-                                ),
-                            ], false),
-                            (vec![
-                                ElementAnimationData::new(
-                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 1, 2),
-                                    (Register::vector(VecRegName::YMM, 1), LayoutLocation::BOTTOM, 0, 2),
-                                    |element| { element.set_string("6Success".into()); }
-                                ),
-                            ], false),
-                        ]))
-                    );
-                    self.register_visualizer.start_move_animation_sequence_after_start_animation(&vec![
-                        Register::vector(VecRegName::YMM, 0),
-                        Register::vector(VecRegName::YMM, 1)
-                    ]);
-                }
-                if ui.button("Register Move").clicked() {
-                    let mut v = vec![];
-                    add_register_group_animation_data!(v;
-                        vec_reg!(YMM, 0), TOP, 0, vec_reg!(YMM, 0), BOTTOM, 0,
-                        |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}
-                    );
-                    self.register_visualizer.set_group_move_animation_sequence(
-                        Arc::new(Mutex::new(vec![
-                            (v, false),
-                        ]))
-                    );
-                    self.register_visualizer.start_move_animation_sequence_after_start_animation(&vec![
-                        Register::vector(VecRegName::YMM, 0),
-                    ]);
+                    self.animation_fsm.set_update_data(|| {
+                        println!("3");
+                    });
+                    self.animation_fsm.set_destroy_layout(|| {
+                        println!("4");
+                    });
+                    self.animation_fsm.start();
                 }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
@@ -312,6 +180,8 @@ impl App for APP {
                 if self.register_visualizer.is_animating() {
                     ctx.request_repaint();
                 }
+                // Run Animation FSM
+                self.animation_fsm.run();
             });
         Window::new("Memory")
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))

@@ -772,7 +772,7 @@ impl RegVisualizer {
             std::mem::swap(&mut string, &mut target_vec[target.2][target.3].string);
             std::mem::swap(&mut order, &mut target_vec[target.2][target.3].order);
             std::mem::swap(&mut color, &mut target_vec[target.2][target.3].color);
-            target_vec[target.2][target.3].order.get_lower();
+            target_vec[target.2][target.3].order = target_vec[target.2][target.3].order.get_lower();
         }
     }
 }
