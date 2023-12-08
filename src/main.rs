@@ -286,6 +286,21 @@ impl App for APP {
                         Register::vector(VecRegName::YMM, 1)
                     ]);
                 }
+                if ui.button("Register Move").clicked() {
+                    let mut v = vec![];
+                    add_register_group_animation_data!(v;
+                        vec_reg!(YMM, 0), TOP, 0, vec_reg!(YMM, 0), BOTTOM, 0,
+                        |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}
+                    );
+                    self.register_visualizer.set_group_move_animation_sequence(
+                        Arc::new(Mutex::new(vec![
+                            (v, false),
+                        ]))
+                    );
+                    self.register_visualizer.start_move_animation_sequence_after_start_animation(&vec![
+                        Register::vector(VecRegName::YMM, 0),
+                    ]);
+                }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt

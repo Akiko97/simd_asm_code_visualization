@@ -347,7 +347,7 @@ impl RegVisualizer {
 
                 });
             });
-            layout_data.insert(key.clone(), (layout_vecs));
+            layout_data.insert(key.clone(), layout_vecs);
         });
     }
 
@@ -1065,65 +1065,46 @@ macro_rules! create_animation_data {
 }
 
 #[macro_export]
-macro_rules! create_animation_data_in_vec {
-    ($($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr),*) => {
-        $(
-            ElementAnimationData::new(
-                ($sr, LayoutLocation::$sl, $sli, $sri),
-                ($tr, LayoutLocation::$tl, $tli, $tri),
-                $cb
-            ),
-        ),*
-    };
-}
-
-#[macro_export]
-macro_rules! create_animation_data_in_vec_for_register {
-    ($sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $ct:expr, $($cb:expr),*) => {
-        $(
-            ElementAnimationData::new(
-                ($sr, LayoutLocation::$sl, $sli, $ct - 1 - $x),
-                ($tr, LayoutLocation::$tl, $tli, $ct - 1 - $x),
-                $cb
-            ),
-        ),*
-        where
-            [(); $count]:,
-            [(); $count - 1]:,
-            $( const $x: usize = $count - 1 - $x; )*
+macro_rules! add_animation_data {
+    ($vec:expr; $sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr) => {
+        $vec.push(ElementAnimationData::new(
+            ($sr, LayoutLocation::$sl, $sli, $sri),
+            ($tr, LayoutLocation::$tl, $tli, $tri),
+            $cb
+        ));
     };
 }
 
 #[macro_export]
 macro_rules! create_group_animation_data {
-    ($($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr),*) => {
+    ($($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr);*) => {
         vec![
             $(
-                ElementAnimationData::new(
-                    ($sr, LayoutLocation::$sl, $sli, $sri),
-                    ($tr, LayoutLocation::$tl, $tli, $tri),
-                    $cb
-                ),
-            ),*
+                create_animation_data!($sr, $sl, $sli, $sri, $tr, $tl, $tli, $tri, $cb),
+            )*
         ]
     };
 }
 
 #[macro_export]
-macro_rules! create_group_animation_data_for_register {
-    ($sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $ct:expr, $($cb:expr),*) => {
-        vec![
-            $(
-                ElementAnimationData::new(
-                    ($sr, LayoutLocation::$sl, $sli, $ct - 1 - $x),
-                    ($tr, LayoutLocation::$tl, $tli, $ct - 1 - $x),
-                    $cb
-                ),
-            ),*
-        ]
-        where
-            [(); $count]:,
-            [(); $count - 1]:,
-            $( const $x: usize = $count - 1 - $x; )*
+macro_rules! add_group_animation_data {
+    ($vec:expr; $($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr);*) => {
+        $(
+            add_animation_data!($vec; $sr, $sl, $sli, $sri, $tr, $tl, $tli, $tri, $cb);
+        )*
+    };
+}
+
+#[macro_export]
+macro_rules! add_register_group_animation_data {
+    (@step $_idx:expr; $vec:expr; $sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr,) => {};
+
+    (@step $idx:expr; $vec:expr; $sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $cb_head:expr, $($cb_tail:expr,)*) => {
+        add_animation_data!($vec; $sr, $sl, $sli, $idx, $tr, $tl, $tli, $idx, $cb_head);
+        add_register_group_animation_data!(@step $idx + 1usize; $vec; $sr, $sl, $sli, $tr, $tl, $tli, $($cb_tail,)*);
+    };
+
+    ($vec:expr; $sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $($cb:expr),*) => {
+        add_register_group_animation_data!(@step 0usize; $vec; $sr, $sl, $sli, $tr, $tl, $tli, $($cb,)*);
     };
 }
