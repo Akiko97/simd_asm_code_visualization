@@ -1065,6 +1065,36 @@ macro_rules! create_animation_data {
 }
 
 #[macro_export]
+macro_rules! create_animation_data_in_vec {
+    ($($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr),*) => {
+        $(
+            ElementAnimationData::new(
+                ($sr, LayoutLocation::$sl, $sli, $sri),
+                ($tr, LayoutLocation::$tl, $tli, $tri),
+                $cb
+            ),
+        ),*
+    };
+}
+
+#[macro_export]
+macro_rules! create_animation_data_in_vec_for_register {
+    ($sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $ct:expr, $($cb:expr),*) => {
+        $(
+            ElementAnimationData::new(
+                ($sr, LayoutLocation::$sl, $sli, $ct - 1 - $x),
+                ($tr, LayoutLocation::$tl, $tli, $ct - 1 - $x),
+                $cb
+            ),
+        ),*
+        where
+            [(); $count]:,
+            [(); $count - 1]:,
+            $( const $x: usize = $count - 1 - $x; )*
+    };
+}
+
+#[macro_export]
 macro_rules! create_group_animation_data {
     ($($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr),*) => {
         vec![
