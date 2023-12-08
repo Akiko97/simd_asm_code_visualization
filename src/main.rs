@@ -22,7 +22,7 @@ use crate::animation_fsm::{AnimationFSM, FSMCtrlMsg};
 
 struct APP {
     // Data
-    cpu: CPU,
+    cpu: Arc<Mutex<CPU>>,
     reg_visualizer_data: RegVisualizerData,
     // Windows
     register_visualizer: Arc<Mutex<RegVisualizer>>,
@@ -43,7 +43,7 @@ impl Default for APP {
     fn default() -> Self {
         Self {
             // Data
-            cpu: CPU::default(),
+            cpu: Arc::new(Mutex::new(CPU::default())),
             reg_visualizer_data: RegVisualizerData::default(),
             // Windows
             register_visualizer: Arc::new(Mutex::new(RegVisualizer::default())),
@@ -156,10 +156,11 @@ impl App for APP {
                 // Debug
                 if ui.button("test").clicked() {
                     let rv = self.register_visualizer.clone();
+                    let ctx_clone = ctx.clone();
                     self.animation_fsm.set_create_layout(move |fsm| {
                         let mut rv = rv.lock().unwrap();
                         rv.create_animation_layout_with_repeat_numbers(
-                            &vec_reg!(YMM, 0), LayoutLocation::BOTTOM, (0, 2)
+                            &vec_reg!(YMM, 0), LayoutLocation::BOTTOM, (0, 2), &ctx_clone
                         );
                         fsm.next();
                     });
@@ -197,13 +198,19 @@ impl App for APP {
                             sender.send(FSMCtrlMsg::Next).unwrap();
                         });
                     });
+                    let cpu = self.cpu.clone();
                     self.animation_fsm.set_update_data(move |fsm| {
+                        let mut cpu = cpu.lock().unwrap();
+                        cpu.registers.set_by_sections::<u32>(VecRegName::YMM, 0, vec![
+                            9, 9, 9, 9, 9, 9, 9, 9
+                        ]);
                         fsm.next();
                     });
                     let rv = self.register_visualizer.clone();
+                    let ctx_clone = ctx.clone();
                     self.animation_fsm.set_destroy_layout(move |fsm| {
                         let mut rv = rv.lock().unwrap();
-                        rv.remove_animation_layout(&vec_reg!(YMM, 0));
+                        rv.remove_animation_layout(&vec_reg!(YMM, 0), &ctx_clone);
                         fsm.next();
                     });
                     self.animation_fsm.start();
@@ -214,7 +221,9 @@ impl App for APP {
                 });
                 let mut register_visualizer = self.register_visualizer.lock().unwrap();
                 register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
-                register_visualizer.show(ui, &self.reg_visualizer_data, &self.cpu);
+                let mut cpu = self.cpu.lock().unwrap();
+                register_visualizer.show(ui, &self.reg_visualizer_data, &cpu);
+                drop(cpu);
                 register_visualizer.move_animation_sequence(ctx);
                 register_visualizer.move_animation_finish(ctx);
                 if register_visualizer.is_animating() {

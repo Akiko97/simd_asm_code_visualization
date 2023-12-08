@@ -656,14 +656,17 @@ impl RegAnimationConfig {
 }
 
 impl RegVisualizer {
-    pub fn create_animation_layout(&mut self, reg: &Register, location: LayoutLocation) {
+    pub fn create_animation_layout(&mut self, reg: &Register, location: LayoutLocation, ctx: &Context) {
         self.animation_config.insert(reg.clone(), RegAnimationConfig::default().with_location(location));
+        ctx.request_repaint();
     }
-    pub fn create_animation_layout_with_repeat_numbers(&mut self, reg: &Register, location: LayoutLocation, repeat_numbers: (usize, usize)) {
+    pub fn create_animation_layout_with_repeat_numbers(&mut self, reg: &Register, location: LayoutLocation, repeat_numbers: (usize, usize), ctx: &Context) {
         self.animation_config.insert(reg.clone(), RegAnimationConfig::default().with_location(location).with_repeat_numbers(repeat_numbers));
+        ctx.request_repaint();
     }
-    pub fn remove_animation_layout(&mut self, reg: &Register) {
+    pub fn remove_animation_layout(&mut self, reg: &Register, ctx: &Context) {
         self.animation_config.remove(reg);
+        ctx.request_repaint();
     }
     pub fn change_animation_elements_layer_with_number(&mut self, key: &(Register, LayoutLocation), number: usize, layer_order: ElementOrder) {
         if let Some(elements_vec) = self.animation_elements.get_mut(key) {
