@@ -3,7 +3,6 @@
 
 use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
-use std::collections::HashMap;
 use eframe::{App, Frame, NativeOptions};
 use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel, Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Shape, Rect, epaint, Label, Slider, ComboBox, Color32};
 use std::sync::{Arc, Mutex};
@@ -221,7 +220,7 @@ impl App for APP {
                 });
                 let mut register_visualizer = self.register_visualizer.lock().unwrap();
                 register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
-                let mut cpu = self.cpu.lock().unwrap();
+                let cpu = self.cpu.lock().unwrap();
                 register_visualizer.show(ui, &self.reg_visualizer_data, &cpu);
                 drop(cpu);
                 register_visualizer.move_animation_sequence(ctx);
