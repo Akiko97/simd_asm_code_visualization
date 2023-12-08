@@ -18,14 +18,14 @@ use reg_visualizer::{RegVisualizer, LayoutLocation, ElementAnimationData};
 use visualizer_setting::{VisualizerSetting};
 use utilities::*;
 use reg_visualizer_data::RegVisualizerData;
-use crate::animation_fsm::AnimationFSM;
+use crate::animation_fsm::{AnimationFSM, FSMCtrlMsg};
 
 struct APP {
     // Data
     cpu: CPU,
     reg_visualizer_data: RegVisualizerData,
     // Windows
-    register_visualizer: RegVisualizer,
+    register_visualizer: Arc<Mutex<RegVisualizer>>,
     visualizer_setting: VisualizerSetting,
     animation_fsm: AnimationFSM,
     // Code Editor
@@ -46,7 +46,7 @@ impl Default for APP {
             cpu: CPU::default(),
             reg_visualizer_data: RegVisualizerData::default(),
             // Windows
-            register_visualizer: RegVisualizer::default(),
+            register_visualizer: Arc::new(Mutex::new(RegVisualizer::default())),
             visualizer_setting: VisualizerSetting::default(),
             animation_fsm: AnimationFSM::default(),
             // Code Editor
@@ -155,17 +155,56 @@ impl App for APP {
             .show(ctx, |ui| {
                 // Debug
                 if ui.button("test").clicked() {
-                    self.animation_fsm.set_create_layout(|| {
-                        println!("1");
+                    let rv = self.register_visualizer.clone();
+                    self.animation_fsm.set_create_layout(move |fsm| {
+                        let mut rv = rv.lock().unwrap();
+                        rv.create_animation_layout_with_repeat_numbers(
+                            &vec_reg!(YMM, 0), LayoutLocation::BOTTOM, (0, 2)
+                        );
+                        fsm.next();
                     });
-                    self.animation_fsm.set_run_animation(|| {
-                        println!("2");
+                    let rv = self.register_visualizer.clone();
+                    self.animation_fsm.set_run_animation(move |fsm| {
+                        let mut rv = rv.lock().unwrap();
+                        let mut v1 = vec![];
+                        add_register_group_animation_data!(v1;
+                            vec_reg!(YMM, 0), BOTTOM, 0, vec_reg!(YMM, 0), BOTTOM, 1,
+                            |e| {e.set_string(String::from("9"))},
+                            |e| {e.set_string(String::from("9"))},
+                            |e| {e.set_string(String::from("9"))},
+                            |e| {e.set_string(String::from("9"))},
+                            |e| {e.set_string(String::from("9"))},
+                            |e| {e.set_string(String::from("9"))},
+                            |e| {e.set_string(String::from("9"))},
+                            |e| {e.set_string(String::from("9"))}
+                        );
+                        let mut v2 = vec![];
+                        add_register_group_animation_data!(v2;
+                            vec_reg!(YMM, 0), BOTTOM, 1, vec_reg!(YMM, 0), None, 0,
+                            |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}, |_| {}
+                        );
+                        rv.set_group_move_animation_sequence(
+                            Arc::new(Mutex::new(vec![
+                                (v1, false),
+                                (v2, false),
+                            ]))
+                        );
+                        rv.start_move_animation_sequence_after_start_animation(
+                            &vec![vec_reg!(YMM, 0)]
+                        );
+                        let sender = fsm.sender.clone();
+                        rv.set_sequence_finished_callback(move || {
+                            sender.send(FSMCtrlMsg::Next).unwrap();
+                        });
                     });
-                    self.animation_fsm.set_update_data(|| {
-                        println!("3");
+                    self.animation_fsm.set_update_data(move |fsm| {
+                        fsm.next();
                     });
-                    self.animation_fsm.set_destroy_layout(|| {
-                        println!("4");
+                    let rv = self.register_visualizer.clone();
+                    self.animation_fsm.set_destroy_layout(move |fsm| {
+                        let mut rv = rv.lock().unwrap();
+                        rv.remove_animation_layout(&vec_reg!(YMM, 0));
+                        fsm.next();
                     });
                     self.animation_fsm.start();
                 }
@@ -173,13 +212,15 @@ impl App for APP {
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt
                 });
-                self.register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
-                self.register_visualizer.show(ui, &self.reg_visualizer_data, &self.cpu);
-                self.register_visualizer.move_animation_sequence(ctx);
-                self.register_visualizer.move_animation_finish(ctx);
-                if self.register_visualizer.is_animating() {
+                let mut register_visualizer = self.register_visualizer.lock().unwrap();
+                register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
+                register_visualizer.show(ui, &self.reg_visualizer_data, &self.cpu);
+                register_visualizer.move_animation_sequence(ctx);
+                register_visualizer.move_animation_finish(ctx);
+                if register_visualizer.is_animating() {
                     ctx.request_repaint();
                 }
+                drop(register_visualizer);
                 // Run Animation FSM
                 self.animation_fsm.run();
             });

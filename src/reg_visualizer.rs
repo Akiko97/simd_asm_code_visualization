@@ -266,6 +266,7 @@ pub struct RegVisualizer {
     sequence: Option<Vec<Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>>>,
     finish_sender: Sender<ElementAnimationFinishMsg>,
     finish_receiver: Receiver<ElementAnimationFinishMsg>,
+    sequence_finished_callback: Option<Box<dyn FnOnce() + Send + 'static>>,
 }
 
 impl Default for RegVisualizer {
@@ -286,6 +287,7 @@ impl Default for RegVisualizer {
             sequence: None,
             finish_sender,
             finish_receiver,
+            sequence_finished_callback: None,
         }
     }
 }
@@ -570,13 +572,16 @@ impl RegVisualizer {
                     self.sequence = Some(s.clone());
                     if s.is_empty() {
                         self.sequence = None;
+                        if let Some(callback) = self.sequence_finished_callback.take() {
+                            callback();
+                        }
                     } else {
                         self.sender.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
                         ctx.request_repaint();
                     }
                 }
             }
-            Err(mpsc::TryRecvError::Empty) => {
+            Err(TryRecvError::Empty) => {
                 /* Do nothing */
             }
             Err(_) => {
@@ -1055,6 +1060,12 @@ impl RegVisualizer {
                 }
             });
         });
+    }
+    pub fn set_sequence_finished_callback<F>(&mut self, callback: F)
+        where
+            F: FnOnce() + Send + 'static,
+    {
+        self.sequence_finished_callback = Some(Box::new(callback));
     }
 }
 
