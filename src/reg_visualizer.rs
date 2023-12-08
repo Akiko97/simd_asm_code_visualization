@@ -3,8 +3,7 @@ use std::hash::Hash;
 use std::sync::Mutex;
 use eframe::egui::{self, Vec2, Pos2, Ui, Color32};
 use super::*;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
 pub fn get_size_from_value(value: &Value) -> Vec2 {
     match value {
@@ -97,6 +96,7 @@ pub struct Element {
     value: Value,
     string: Option<String>,
     // Animation
+    display: bool,
     order: ElementOrder,
     color: Color32,
     border_color: Color32,
@@ -115,6 +115,7 @@ impl Default for Element {
             value: Value::default(),
             string: None,
             // Animation
+            display: true,
             order: ElementOrder::Normal,
             color: Color32::TRANSPARENT,
             border_color: Color32::TRANSPARENT,
@@ -152,6 +153,12 @@ impl Element {
     fn with_border_color(self, border_color: Color32) -> Self {
         Self {
             border_color,
+            ..self
+        }
+    }
+    fn with_display(self, display: bool) -> Self {
+        Self {
+            display,
             ..self
         }
     }
@@ -257,11 +264,14 @@ pub struct RegVisualizer {
     sender: Sender<AnimationControlMsg>,
     receiver: Receiver<AnimationControlMsg>,
     sequence: Option<Vec<Arc<Mutex<Vec<(Vec<ElementAnimationData>, bool)>>>>>,
+    finish_sender: Sender<ElementAnimationFinishMsg>,
+    finish_receiver: Receiver<ElementAnimationFinishMsg>,
 }
 
 impl Default for RegVisualizer {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
+        let (finish_sender, finish_receiver) = mpsc::channel();
         Self {
             // Visualization Data
             layout_data: HashMap::new(),
@@ -274,6 +284,8 @@ impl Default for RegVisualizer {
             sender,
             receiver,
             sequence: None,
+            finish_sender,
+            finish_receiver,
         }
     }
 }
@@ -287,29 +299,31 @@ impl RegVisualizer {
 
 macro_rules! show_element {
     ($ui:expr, $element:expr, $low_layer_id:expr, $middle_layer_id:expr, $high_layer_id:expr, $top_layer_id:expr) => {
-        match $element.order {
-            ElementOrder::Normal => {
-                $element.show($ui);
-            }
-            ElementOrder::Low => {
-                $ui.with_layer_id($low_layer_id, |ui| {
-                    $element.show(ui);
-                });
-            }
-            ElementOrder::Middle => {
-                $ui.with_layer_id($middle_layer_id, |ui| {
-                    $element.show(ui);
-                });
-            }
-            ElementOrder::High => {
-                $ui.with_layer_id($high_layer_id, |ui| {
-                    $element.show(ui);
-                });
-            }
-            ElementOrder::Top => {
-                $ui.with_layer_id($top_layer_id, |ui| {
-                    $element.show(ui);
-                });
+        if $element.display {
+            match $element.order {
+                ElementOrder::Normal => {
+                    $element.show($ui);
+                }
+                ElementOrder::Low => {
+                    $ui.with_layer_id($low_layer_id, |ui| {
+                        $element.show(ui);
+                    });
+                }
+                ElementOrder::Middle => {
+                    $ui.with_layer_id($middle_layer_id, |ui| {
+                        $element.show(ui);
+                    });
+                }
+                ElementOrder::High => {
+                    $ui.with_layer_id($high_layer_id, |ui| {
+                        $element.show(ui);
+                    });
+                }
+                ElementOrder::Top => {
+                    $ui.with_layer_id($top_layer_id, |ui| {
+                        $element.show(ui);
+                    });
+                }
             }
         }
     };
@@ -351,7 +365,7 @@ impl RegVisualizer {
         });
     }
 
-    fn create_elements<T: Hash + Clone + Eq + PartialEq>(values: &Vec<Value>, key: &T, reg: &Register, layout_data: &HashMap<T, Vec<Vec<(Pos2, Vec2)>>>, elements: &mut HashMap<T, Vec<Vec<Element>>>) {
+    fn create_elements<T: Hash + Clone + Eq + PartialEq>(values: &Vec<Value>, key: &T, reg: &Register, layout_data: &HashMap<T, Vec<Vec<(Pos2, Vec2)>>>, elements: &mut HashMap<T, Vec<Vec<Element>>>, display: bool) {
         let values_changed = if let Some(layout_vec) = layout_data.get(key) {
             if let Some(elements_vec) = elements.get(key) {
                 layout_vec[0].len() != elements_vec[0].len() ||
@@ -370,6 +384,7 @@ impl RegVisualizer {
                         let mut element_vec = vec![];
                         vec.iter().enumerate().for_each(|(index, (position, size))| {
                             element_vec.push(Element::default()
+                                .with_display(display)
                                 .with_value(values[index].clone())
                                 .with_position(position.clone())
                                 .with_color(get_color(&get_reg_name(reg)))
@@ -429,15 +444,15 @@ impl RegVisualizer {
                     // Animation Layout - TOP
                     if location == LayoutLocation::TOP || location == LayoutLocation::BOTH {
                         RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::TOP), values.len(), repeat_number.0, &mut self.animation_layout_data);
-                        RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::TOP), reg, &self.animation_layout_data, &mut self.animation_elements);
+                        RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::TOP), reg, &self.animation_layout_data, &mut self.animation_elements, false);
                     }
                     // Elements Layout
                     RegVisualizer::create_layout(ui, size, reg, values.len(), 1, &mut self.layout_data);
-                    RegVisualizer::create_elements(&values, reg, reg, &self.layout_data, &mut self.elements);
+                    RegVisualizer::create_elements(&values, reg, reg, &self.layout_data, &mut self.elements, true);
                     // Animation Layout - BOTTOM
                     if location == LayoutLocation::BOTTOM || location == LayoutLocation::BOTH {
                         RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::BOTTOM), values.len(), repeat_number.1, &mut self.animation_layout_data);
-                        RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::BOTTOM), reg, &self.animation_layout_data, &mut self.animation_elements);
+                        RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::BOTTOM), reg, &self.animation_layout_data, &mut self.animation_elements, false);
                     }
                 });
             });
@@ -495,37 +510,35 @@ impl RegVisualizer {
         // Show Animation Elements
         self.animation_elements.iter().for_each(|((reg, loc), vec)| {
             if let Some(config) = self.animation_config.get(reg) {
-                if config.show_element {
-                    match config.location {
-                        LayoutLocation::TOP => {
-                            if *loc == LayoutLocation::TOP {
-                                vec.iter().for_each(|elements| {
-                                    elements.iter().for_each(|element| {
-                                        show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
-                                    });
+                match config.location {
+                    LayoutLocation::TOP => {
+                        if *loc == LayoutLocation::TOP {
+                            vec.iter().for_each(|elements| {
+                                elements.iter().for_each(|element| {
+                                    show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
                                 });
-                            }
+                            });
                         }
-                        LayoutLocation::BOTTOM => {
-                            if *loc == LayoutLocation::BOTTOM {
-                                vec.iter().for_each(|elements| {
-                                    elements.iter().for_each(|element| {
-                                        show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
-                                    });
-                                });
-                            }
-                        }
-                        LayoutLocation::BOTH => {
-                            if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
-                                vec.iter().for_each(|elements| {
-                                    elements.iter().for_each(|element| {
-                                        show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
-                                    });
-                                });
-                            }
-                        }
-                        LayoutLocation::None => {}
                     }
+                    LayoutLocation::BOTTOM => {
+                        if *loc == LayoutLocation::BOTTOM {
+                            vec.iter().for_each(|elements| {
+                                elements.iter().for_each(|element| {
+                                    show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
+                                });
+                            });
+                        }
+                    }
+                    LayoutLocation::BOTH => {
+                        if *loc == LayoutLocation::TOP || *loc == LayoutLocation::BOTTOM {
+                            vec.iter().for_each(|elements| {
+                                elements.iter().for_each(|element| {
+                                    show_element!(ui, element, low_layer_id, middle_layer_id, high_layer_id, top_layer_id);
+                                });
+                            });
+                        }
+                    }
+                    LayoutLocation::None => {}
                 }
             }
         });
@@ -572,6 +585,23 @@ impl RegVisualizer {
             }
         }
     }
+    pub fn move_animation_finish(&mut self, ctx: &Context) {
+        loop {
+            match self.finish_receiver.try_recv() {
+                Ok(ElementAnimationFinishMsg::SetTarget(source, target)) => {
+                    self.set_target_for_move_animation_finish(source, target);
+                    ctx.request_repaint();
+                }
+                Err(TryRecvError::Empty) => {
+                    break;
+                    /* Do nothing */
+                }
+                Err(_) => {
+                    /* Error */
+                }
+            }
+        }
+    }
 }
 
 // Animation
@@ -584,7 +614,6 @@ pub enum LayoutLocation {
 struct RegAnimationConfig {
     location: LayoutLocation,
     repeat_numbers: (usize, usize), // (TOP, BOTTOM)
-    show_element: bool,
 }
 
 impl Default for RegAnimationConfig {
@@ -592,7 +621,6 @@ impl Default for RegAnimationConfig {
         Self {
             location: LayoutLocation::None,
             repeat_numbers: (0, 0),
-            show_element: false,
         }
     }
 }
@@ -619,18 +647,6 @@ impl RegAnimationConfig {
             repeat_numbers,
             ..self
         }
-    }
-    fn with_show(self, show_element: bool) -> Self {
-        Self {
-            show_element,
-            ..self
-        }
-    }
-    fn get_show(&mut self) -> bool {
-        self.show_element
-    }
-    fn set_show(&mut self, show_element: bool) {
-        self.show_element = show_element;
     }
 }
 
@@ -695,8 +711,14 @@ impl RegVisualizer {
         }
     }
     pub fn start_show_animation_elements(&mut self, reg: &Register) {
-        if let Some(config) = self.animation_config.get_mut(reg) {
-            config.show_element = true;
+        // if let Some(config) = self.animation_config.get_mut(reg) {
+        //     config.show_element = true;
+        // }
+        if let Some(elements_vec) = self.animation_elements.get_mut(&(*reg, LayoutLocation::TOP)) {
+            elements_vec.iter_mut().for_each(|elements| elements.iter_mut().for_each(|element| element.display = true));
+        }
+        if let Some(elements_vec) = self.animation_elements.get_mut(&(*reg, LayoutLocation::BOTTOM)) {
+            elements_vec.iter_mut().for_each(|elements| elements.iter_mut().for_each(|element| element.display = true));
         }
     }
     pub fn set_string_for_animation_element(&mut self, key: &(Register, LayoutLocation), number: usize, index: usize, str: String) {
@@ -731,22 +753,17 @@ impl RegVisualizer {
             }
         }
     }
-    pub fn exchange_animation_elements(&mut self, source: (Register, LayoutLocation, usize, usize), target: (Register, LayoutLocation, usize, usize)) {
+    pub fn set_target_for_move_animation_finish(&mut self, source: (Register, LayoutLocation, usize, usize), target: (Register, LayoutLocation, usize, usize)) {
         let mut value;
         let mut string;
         let mut order;
         let mut color;
-        let mut layout_position;
-        let mut position;
-        let mut target_position;
-        if let Some(source_vec) = self.animation_elements.get(&(source.0, source.1)) {
+        if let Some(source_vec) = self.animation_elements.get_mut(&(source.0, source.1)) {
             value = source_vec[source.2][source.3].value;
             string = source_vec[source.2][source.3].string.clone();
             order = source_vec[source.2][source.3].order;
             color = source_vec[source.2][source.3].color;
-            layout_position = source_vec[source.2][source.3].layout_position;
-            position = source_vec[source.2][source.3].position;
-            target_position = source_vec[source.2][source.3].target_position;
+            source_vec[source.2][source.3].display = false;
         } else {
             return;
         }
@@ -755,18 +772,7 @@ impl RegVisualizer {
             std::mem::swap(&mut string, &mut target_vec[target.2][target.3].string);
             std::mem::swap(&mut order, &mut target_vec[target.2][target.3].order);
             std::mem::swap(&mut color, &mut target_vec[target.2][target.3].color);
-            std::mem::swap(&mut layout_position, &mut target_vec[target.2][target.3].layout_position);
-            std::mem::swap(&mut position, &mut target_vec[target.2][target.3].position);
-            std::mem::swap(&mut target_position, &mut target_vec[target.2][target.3].target_position);
-        }
-        if let Some(source_vec) = self.animation_elements.get_mut(&(source.0, source.1)) {
-            std::mem::swap(&mut value, &mut source_vec[source.2][source.3].value);
-            std::mem::swap(&mut string, &mut source_vec[source.2][source.3].string);
-            std::mem::swap(&mut order, &mut source_vec[source.2][source.3].order);
-            std::mem::swap(&mut color, &mut source_vec[source.2][source.3].color);
-            std::mem::swap(&mut layout_position, &mut source_vec[source.2][source.3].layout_position);
-            std::mem::swap(&mut position, &mut source_vec[source.2][source.3].position);
-            std::mem::swap(&mut target_position, &mut source_vec[source.2][source.3].target_position);
+            target_vec[target.2][target.3].order.get_lower();
         }
     }
 }
@@ -794,6 +800,10 @@ impl ElementAnimationData {
 enum AnimationControlMsg {
     ExecuteAnimation(usize),
     Terminate,
+}
+
+enum ElementAnimationFinishMsg {
+    SetTarget((Register, LayoutLocation, usize, usize), (Register, LayoutLocation, usize, usize)),
 }
 
 impl RegVisualizer {
@@ -825,6 +835,7 @@ impl RegVisualizer {
                                                 }
                                             }
                                         });
+                                        element.display = true;
                                     });
                                 }
                             });
@@ -851,6 +862,7 @@ impl RegVisualizer {
                                                 }
                                             }
                                         });
+                                        element.display = true;
                                     });
                                 }
                             });
@@ -886,6 +898,7 @@ impl RegVisualizer {
                                                 }
                                             }
                                         });
+                                        element.display = true;
                                     });
                                 }
                             });
@@ -909,6 +922,7 @@ impl RegVisualizer {
                                                 }
                                             }
                                         });
+                                        element.display = true;
                                     });
                                 }
                             });
@@ -917,7 +931,6 @@ impl RegVisualizer {
                 }
                 LayoutLocation::None => {}
             }
-            config.show_element = true;
         }
     }
     pub fn move_animation<F>(&mut self, data: ElementAnimationData, is_layout: bool, callback: F)
@@ -969,10 +982,12 @@ impl RegVisualizer {
                 if elements_vec[data.source.2][data.source.3].order <= target_data.1 {
                     elements_vec[data.source.2][data.source.3].order = target_data.1.get_higher();
                 }
+                let sender = self.finish_sender.clone();
                 if let Some(callback_in_data) = data.callback {
-                    elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|element| {
+                    elements_vec[data.source.2][data.source.3].set_animation_finished_callback(move |element| {
                         callback_in_data(element);
                         callback();
+                        sender.send(ElementAnimationFinishMsg::SetTarget(data.source, data.target)).unwrap();
                     });
                 } else {
                     elements_vec[data.source.2][data.source.3].set_animation_finished_callback(|_| {
@@ -1025,7 +1040,7 @@ impl RegVisualizer {
     }
     pub fn start_move_animation_sequence_after_start_animation(&mut self, regs: &Vec<Register>) {
         let length = regs.len();
-        let mut count = Arc::new(Mutex::new(0usize));
+        let count = Arc::new(Mutex::new(0usize));
         let flag = self.sequence.is_none();
         regs.iter().for_each(|reg| {
             let count_clone = count.clone();

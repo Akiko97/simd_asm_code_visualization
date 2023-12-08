@@ -308,6 +308,7 @@ impl App for APP {
                 self.register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
                 self.register_visualizer.show(ui, &self.reg_visualizer_data, &self.cpu);
                 self.register_visualizer.move_animation_sequence(ctx);
+                self.register_visualizer.move_animation_finish(ctx);
                 if self.register_visualizer.is_animating() {
                     ctx.request_repaint();
                 }
