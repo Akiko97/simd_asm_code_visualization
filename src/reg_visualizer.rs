@@ -100,6 +100,7 @@ pub struct Element {
     order: ElementOrder,
     color: Color32,
     border_color: Color32,
+    is_highlight: bool,
     layout_position: Pos2,
     position: Pos2,
     target_position: Pos2,
@@ -119,6 +120,7 @@ impl Default for Element {
             order: ElementOrder::Normal,
             color: Color32::TRANSPARENT,
             border_color: Color32::TRANSPARENT,
+            is_highlight: false,
             layout_position: Pos2::new(0f32, 0f32),
             position: Pos2::new(0f32, 0f32),
             target_position: Pos2::new(0f32, 0f32),
@@ -186,7 +188,7 @@ impl Element {
         ui.painter().rect_stroke(
             Rect::from_min_size(self.position, rect_size),
             0.0,
-            egui::Stroke::new(2.0, self.border_color),
+            egui::Stroke::new(2.0, if self.is_highlight {Color32::RED} else {self.border_color}),
         );
         // Adaptive Text Size
         let mut font_size = 20f32;
@@ -249,6 +251,12 @@ impl Element {
     }
     pub fn reset_string(&mut self) {
         self.string = None;
+    }
+    pub fn highlight(&mut self) {
+        self.is_highlight = true;
+    }
+    pub fn reset_highlight(&mut self) {
+        self.is_highlight = false;
     }
 }
 
@@ -719,9 +727,6 @@ impl RegVisualizer {
         }
     }
     pub fn start_show_animation_elements(&mut self, reg: &Register) {
-        // if let Some(config) = self.animation_config.get_mut(reg) {
-        //     config.show_element = true;
-        // }
         if let Some(elements_vec) = self.animation_elements.get_mut(&(*reg, LayoutLocation::TOP)) {
             elements_vec.iter_mut().for_each(|elements| elements.iter_mut().for_each(|element| element.display = true));
         }
@@ -782,6 +787,14 @@ impl RegVisualizer {
             std::mem::swap(&mut color, &mut target_vec[target.2][target.3].color);
             target_vec[target.2][target.3].order = target_vec[target.2][target.3].order.get_lower();
         }
+    }
+    pub fn highlight(&mut self, reg: &Register) {
+        if let Some(elements) = self.elements.get_mut(reg) {
+            elements[0].iter_mut().for_each(|element| { element.highlight() });
+        }
+    }
+    pub fn reset_highlight(&mut self) {
+        self.elements.values_mut().for_each(|elements| elements[0].iter_mut().for_each(|element| element.reset_highlight()));
     }
 }
 

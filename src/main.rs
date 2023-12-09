@@ -154,6 +154,9 @@ impl App for APP {
             .show(ctx, |ui| {
                 // Debug
                 if ui.button("test").clicked() {
+                    let mut rv = self.register_visualizer.lock().unwrap();
+                    rv.reset_highlight();
+                    drop(rv);
                     let rv = self.register_visualizer.clone();
                     let ctx_clone = ctx.clone();
                     self.animation_fsm.set_create_layout(move |fsm| {
@@ -210,6 +213,7 @@ impl App for APP {
                     self.animation_fsm.set_destroy_layout(move |fsm| {
                         let mut rv = rv.lock().unwrap();
                         rv.remove_animation_layout(&vec_reg!(YMM, 0), &ctx_clone);
+                        rv.highlight(&vec_reg!(YMM, 0));
                         fsm.next();
                     });
                     self.animation_fsm.start();
