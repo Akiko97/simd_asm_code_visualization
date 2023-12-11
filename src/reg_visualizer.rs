@@ -249,6 +249,21 @@ impl Element {
     pub fn set_string(&mut self, str: String) {
         self.string = Some(str);
     }
+    pub fn get_value(&self) -> Value {
+        self.value
+    }
+    pub fn set_value(&mut self, v: Value) {
+        self.value = v;
+    }
+    pub fn set_order(&mut self, o: ElementOrder) {
+        self.order = o;
+    }
+    pub fn set_color(&mut self, c: Color32) {
+        self.color = c;
+    }
+    pub fn set_border_color(&mut self, c: Color32) {
+        self.border_color = c;
+    }
     pub fn reset_string(&mut self) {
         self.string = None;
     }
@@ -417,7 +432,7 @@ impl RegVisualizer {
                 match reg.get_type() {
                     RegType::GPR => {
                         let v = cpu.registers.get_gpr_value(reg.get_gpr());
-                        values = vec![create_value_with_gpr(v, &reg.get_gpr(), data.gprs_type.get(&reg.get_gpr()).unwrap())];
+                        values = vec![create_value_with_gpr(v, &reg.get_gpr())];
                     }
                     RegType::Vector => {
                         let (reg_type, reg_index) = reg.get_vector();
@@ -556,6 +571,7 @@ impl RegVisualizer {
     pub fn move_animation_sequence(&mut self, ctx: &Context) {
         match self.receiver.try_recv() {
             Ok(AnimationControlMsg::ExecuteAnimation(index)) => {
+                println!("{}", index);
                 if self.sequence.is_none() {
                     self.sender.send(AnimationControlMsg::Terminate).unwrap();
                     return;
@@ -564,16 +580,25 @@ impl RegVisualizer {
                 let mut groups = sequence.lock().unwrap();
                 let length = groups.len();
                 let group = std::mem::take(&mut groups[index]);
-                let sender_clone = self.sender.clone();
-                self.group_move_animation(group.0, group.1, move || {
+                if group.0.is_empty() {
                     if index + 1 < length {
-                        sender_clone.send(AnimationControlMsg::ExecuteAnimation(index + 1)).unwrap();
+                        self.sender.send(AnimationControlMsg::ExecuteAnimation(index + 1)).unwrap();
                     } else {
-                        sender_clone.send(AnimationControlMsg::Terminate).unwrap();
+                        self.sender.send(AnimationControlMsg::Terminate).unwrap();
                     }
-                });
+                } else {
+                    let sender_clone = self.sender.clone();
+                    self.group_move_animation(group.0, group.1, move || {
+                        if index + 1 < length {
+                            sender_clone.send(AnimationControlMsg::ExecuteAnimation(index + 1)).unwrap();
+                        } else {
+                            sender_clone.send(AnimationControlMsg::Terminate).unwrap();
+                        }
+                    });
+                }
             }
             Ok(AnimationControlMsg::Terminate) => {
+                println!("Terminate");
                 if let Some(s) = self.sequence.as_deref_mut() {
                     let mut s = s.to_vec();
                     s.remove(0);
@@ -586,6 +611,10 @@ impl RegVisualizer {
                     } else {
                         self.sender.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
                         ctx.request_repaint();
+                    }
+                } else {
+                    if let Some(callback) = self.sequence_finished_callback.take() {
+                        callback();
                     }
                 }
             }
@@ -771,21 +800,30 @@ impl RegVisualizer {
         let mut string;
         let mut order;
         let mut color;
+        let mut border_color;
         if let Some(source_vec) = self.animation_elements.get_mut(&(source.0, source.1)) {
-            value = source_vec[source.2][source.3].value;
-            string = source_vec[source.2][source.3].string.clone();
-            order = source_vec[source.2][source.3].order;
-            color = source_vec[source.2][source.3].color;
-            source_vec[source.2][source.3].display = false;
+            let e = &mut source_vec[source.2][source.3];
+            value = e.value.clone();
+            string = e.string.clone();
+            order = e.order.clone();
+            color = e.color.clone();
+            border_color = e.border_color.clone();
+            e.display = false;
         } else {
             return;
         }
         if let Some(target_vec) = self.animation_elements.get_mut(&(target.0, target.1)) {
-            std::mem::swap(&mut value, &mut target_vec[target.2][target.3].value);
-            std::mem::swap(&mut string, &mut target_vec[target.2][target.3].string);
-            std::mem::swap(&mut order, &mut target_vec[target.2][target.3].order);
-            std::mem::swap(&mut color, &mut target_vec[target.2][target.3].color);
-            target_vec[target.2][target.3].order = target_vec[target.2][target.3].order.get_lower();
+            let e = &mut target_vec[target.2][target.3];
+            // can not change the value, so change the string
+            // e.set_value(value);
+            if let Some(s) = string {
+                e.set_string(s);
+            } else {
+                e.set_string(value.to_string());
+            }
+            e.set_order(order.get_lower());
+            e.set_color(color);
+            e.set_border_color(border_color);
         }
     }
     pub fn highlight(&mut self, reg: &Register) {
@@ -1062,7 +1100,6 @@ impl RegVisualizer {
     pub fn start_move_animation_sequence_after_start_animation(&mut self, regs: &Vec<Register>) {
         let length = regs.len();
         let count = Arc::new(Mutex::new(0usize));
-        let flag = self.sequence.is_none();
         regs.iter().for_each(|reg| {
             let count_clone = count.clone();
             let sender_clone = self.sender.clone();
@@ -1070,9 +1107,7 @@ impl RegVisualizer {
                 let mut count = count_clone.lock().unwrap();
                 *count += 1;
                 if *count == length {
-                    if !flag {
-                        sender_clone.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
-                    }
+                    sender_clone.send(AnimationControlMsg::ExecuteAnimation(0)).unwrap();
                 }
             });
         });
@@ -1086,21 +1121,11 @@ impl RegVisualizer {
 }
 
 #[macro_export]
-macro_rules! vec_reg {
-    ($reg:ident, $idx:expr) => { Register::vector(VecRegName::$reg, $idx) };
-}
-
-#[macro_export]
-macro_rules! gpr {
-    ($reg:ident) => { Register::gpr(GPRName::$reg) };
-}
-
-#[macro_export]
 macro_rules! create_animation_data {
-    ($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr) => {
+    ($sr:expr, $sl:expr, $sli:expr, $sri:expr, $tr:expr, $tl:expr, $tli:expr, $tri:expr, $cb:expr) => {
         ElementAnimationData::new(
-            ($sr, LayoutLocation::$sl, $sli, $sri),
-            ($tr, LayoutLocation::$tl, $tli, $tri),
+            ($sr, $sl, $sli, $sri),
+            ($tr, $tl, $tli, $tri),
             $cb
         )
     };
@@ -1108,10 +1133,10 @@ macro_rules! create_animation_data {
 
 #[macro_export]
 macro_rules! add_animation_data {
-    ($vec:expr; $sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr) => {
+    ($vec:expr; $sr:expr, $sl:expr, $sli:expr, $sri:expr, $tr:expr, $tl:expr, $tli:expr, $tri:expr, $cb:expr) => {
         $vec.push(ElementAnimationData::new(
-            ($sr, LayoutLocation::$sl, $sli, $sri),
-            ($tr, LayoutLocation::$tl, $tli, $tri),
+            ($sr, $sl, $sli, $sri),
+            ($tr, $tl, $tli, $tri),
             $cb
         ));
     };
@@ -1119,7 +1144,7 @@ macro_rules! add_animation_data {
 
 #[macro_export]
 macro_rules! create_group_animation_data {
-    ($($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr);*) => {
+    ($($sr:expr, $sl:expr, $sli:expr, $sri:expr, $tr:expr, $tl:expr, $tli:expr, $tri:expr, $cb:expr);*) => {
         vec![
             $(
                 create_animation_data!($sr, $sl, $sli, $sri, $tr, $tl, $tli, $tri, $cb),
@@ -1130,7 +1155,7 @@ macro_rules! create_group_animation_data {
 
 #[macro_export]
 macro_rules! add_group_animation_data {
-    ($vec:expr; $($sr:expr, $sl:ident, $sli:expr, $sri:expr, $tr:expr, $tl:ident, $tli:expr, $tri:expr, $cb:expr);*) => {
+    ($vec:expr; $($sr:expr, $sl:expr, $sli:expr, $sri:expr, $tr:expr, $tl:expr, $tli:expr, $tri:expr, $cb:expr);*) => {
         $(
             add_animation_data!($vec; $sr, $sl, $sli, $sri, $tr, $tl, $tli, $tri, $cb);
         )*
@@ -1139,14 +1164,14 @@ macro_rules! add_group_animation_data {
 
 #[macro_export]
 macro_rules! add_register_group_animation_data {
-    (@step $_idx:expr; $vec:expr; $sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr,) => {};
+    (@step $_idx:expr; $vec:expr; $sr:expr, $sl:expr, $sli:expr, $tr:expr, $tl:expr, $tli:expr,) => {};
 
-    (@step $idx:expr; $vec:expr; $sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $cb_head:expr, $($cb_tail:expr,)*) => {
+    (@step $idx:expr; $vec:expr; $sr:expr, $sl:expr, $sli:expr, $tr:expr, $tl:expr, $tli:expr, $cb_head:expr, $($cb_tail:expr,)*) => {
         add_animation_data!($vec; $sr, $sl, $sli, $idx, $tr, $tl, $tli, $idx, $cb_head);
         add_register_group_animation_data!(@step $idx + 1usize; $vec; $sr, $sl, $sli, $tr, $tl, $tli, $($cb_tail,)*);
     };
 
-    ($vec:expr; $sr:expr, $sl:ident, $sli:expr, $tr:expr, $tl:ident, $tli:expr, $($cb:expr),*) => {
+    ($vec:expr; $sr:expr, $sl:expr, $sli:expr, $tr:expr, $tl:expr, $tli:expr, $($cb:expr),*) => {
         add_register_group_animation_data!(@step 0usize; $vec; $sr, $sl, $sli, $tr, $tl, $tli, $($cb,)*);
     };
 }

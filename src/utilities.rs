@@ -21,11 +21,6 @@ pub enum ValueType {
     F64,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub enum UIntFloat {
-    UInt, Float
-}
-
 #[derive(Copy, Clone)]
 pub enum Value {
     U8(u8),
@@ -183,19 +178,13 @@ pub fn create_values<T: IntoValue>(input: Vec<T>) -> Vec<Value> {
     input.into_iter().map(|x| create_value(x)).collect()
 }
 
-pub fn create_value_with_gpr(input: u64, reg: &GPRName, value_type: &UIntFloat) -> Value {
+pub fn create_value_with_gpr(input: u64, reg: &GPRName) -> Value {
     match Utilities::get_gpr_size(reg) {
         64 => {
-            match value_type {
-                UIntFloat::UInt => create_value(input),
-                UIntFloat::Float => create_value(Utilities::u64_to_f64(input)),
-            }
+            create_value(input as u64)
         },
         32 => {
-            match value_type {
-                UIntFloat::UInt => create_value(input as u32),
-                UIntFloat::Float => create_value(Utilities::u32_to_f32(input as u32)),
-            }
+            create_value(input as u32)
         },
         16 => {
             create_value(input as u16)
@@ -317,4 +306,14 @@ impl Register {
             vector: (VecRegName::XMM, 0),
         }
     }
+}
+
+#[macro_export]
+macro_rules! vec_reg {
+    ($reg:ident, $idx:expr) => { Register::vector(VecRegName::$reg, $idx) };
+}
+
+#[macro_export]
+macro_rules! gpr {
+    ($reg:ident) => { Register::gpr(GPRName::$reg) };
 }

@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 use cpulib::{GPRName, VecRegName};
-use crate::utilities::{Register, UIntFloat, ValueType};
+use crate::utilities::{Register, ValueType};
 
 pub struct RegVisualizerData {
     // Registers Data
     pub registers: Vec<Vec<Register>>,
     pub vector_regs_type: HashMap<(VecRegName, usize), ValueType>,
-    pub gprs_type: HashMap<GPRName, UIntFloat>,
     // Animation Data
     pub velocity: f32,
 }
@@ -17,7 +16,6 @@ impl Default for RegVisualizerData {
             // Registers Data
             registers: vec![vec![]],
             vector_regs_type: HashMap::new(),
-            gprs_type: HashMap::new(),
             // Animation Data
             velocity: 10f32,
         }

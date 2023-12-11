@@ -80,7 +80,6 @@ pub struct VisualizerSetting {
     vec_name: VecRegName,
     vec_index: usize,
     data_type: ValueType,
-    gpr_type: UIntFloat,
 }
 
 impl Default for VisualizerSetting {
@@ -92,7 +91,6 @@ impl Default for VisualizerSetting {
             vec_name: VecRegName::YMM,
             vec_index: 0,
             data_type: ValueType::U32,
-            gpr_type: UIntFloat::UInt,
         }
     }
 }
@@ -146,16 +144,6 @@ impl VisualizerSetting {
                             AH, BH, CH, DH, AL, BL, CL, DL, SIL, DIL, BPL, SPL,
                             R8B, R9B, R10B, R11B, R12B, R13B, R14B, R15B);
                     });
-                match Utilities::get_gpr_size(&self.gpr_name) {
-                    64 | 32 => {
-                        ui.horizontal(|ui| {
-                            ui.label("Data Type:");
-                            ui.radio_value(&mut self.gpr_type, UIntFloat::UInt, "UInt");
-                            ui.radio_value(&mut self.gpr_type, UIntFloat::Float, "Float");
-                        });
-                    }
-                    _ => {},
-                }
             }
             RegType::Vector => {
                 ComboBox::from_label("Vector Register")
@@ -202,7 +190,6 @@ impl VisualizerSetting {
                         if !data.registers[0].iter().any(|r| *r == self.gpr_name) {
                             data.registers[0].push(Register::gpr(self.gpr_name));
                         }
-                        data.gprs_type.insert(self.gpr_name, self.gpr_type);
                     }
                     RegType::Vector => {
                         if !data.registers[0].iter().any(|r| *r == (self.vec_name, self.vec_index)) {
@@ -217,7 +204,6 @@ impl VisualizerSetting {
                 match self.reg_type {
                     RegType::GPR => {
                         data.registers[0].retain(|r| *r != self.gpr_name);
-                        data.gprs_type.remove(&self.gpr_name);
                     }
                     RegType::Vector => {
                         data.registers[0].retain(|r| *r != (self.vec_name, self.vec_index));
