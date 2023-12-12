@@ -2181,6 +2181,7 @@ dependencies = [
  "cpulib",
  "eframe",
  "egui_code_editor",
+ "lazy_static",
 ]
 
 [[package]]

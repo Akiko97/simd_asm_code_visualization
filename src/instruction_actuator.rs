@@ -1,4 +1,5 @@
 use std::collections::{HashMap};
+use lazy_static::lazy_static;
 use std::convert::Into;
 use std::ops::Add;
 use std::sync::{Arc, Mutex};
@@ -303,27 +304,53 @@ fn vaddps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Ar
     add_common_animation(cpu, vrt, odd[0].clone(), odd[1].clone(), odd[2].clone())
 }
 
+type Func = fn(Arc<Mutex<CPU>>, Vec<Operand>, HashMap<(VecRegName, usize), ValueType>);
+type AniFunc = fn(Vec<(Operand, LayoutLocation, (usize, usize))>, Arc<Mutex<CPU>>, HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)>;
+
+macro_rules! new_instruction {
+    ($map:expr; $inst:expr, $target_read:expr, $func:expr, $ani_func:expr) => {
+        $map.insert(String::from($inst), ($target_read, $func as Func, $ani_func as AniFunc))
+    };
+}
+
+fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
+{
+    let mut map = HashMap::new();
+    new_instruction!(map; "vaddps", false, vaddps, vaddps_animation);
+    map
+}
+
+lazy_static! {
+    static ref OPCODES: HashMap<String, (bool, Func, AniFunc)> = {
+        create_instruction_list()
+    };
+}
+
 pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut AnimationFSM, rvd: &RegVisualizerData, ctx: &Context, instruction: &str) {
-    // Parse operands and opcode
-    let (opcode, operands) = split_instruction(instruction);
-    let mut operands = create_operands(operands);
-    let vaddps_is_target_read = false;
-    if vaddps_is_target_read {
-        if let Some(target) = operands.first() {
-            operands.insert(0, target.clone());
-        }
-    }
     // Reset register highlight
     let mut rv_lock = rv.lock().unwrap();
     rv_lock.reset_highlight();
     drop(rv_lock);
+    // Parse operands and opcode
+    let (opcode, operands) = split_instruction(instruction);
+    let mut operands = create_operands(operands);
+    if !OPCODES.contains_key(&opcode) {
+        println!("Unsupport opcode: {}", opcode);
+        return;
+    }
+    let (is_target_read, func, ani_func) = OPCODES.get(&opcode).unwrap();
+    if *is_target_read {
+        if let Some(target) = operands.first() {
+            operands.insert(0, target.clone());
+        }
+    }
     // Animation FSM
     // Update CPU data - must run update date
     let cpu_clone = cpu.clone();
     let operands_clone = operands.clone();
     let vrt = rvd.vector_regs_type.clone();
     fsm.set_update_data(move |fsm| {
-        vaddps(cpu_clone, operands_clone, vrt);
+        func(cpu_clone, operands_clone, vrt);
         fsm.next();
     });
     // Check if need animation - if all register in the display list, show the animation
@@ -454,7 +481,7 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
     let ctx_clone = ctx.clone();
     fsm.set_run_animation(move |fsm| {
         let mut rv = rv_clone.lock().unwrap();
-        let sequence = vaddps_animation(odd, cpu_clone, vrt);
+        let sequence = ani_func(odd, cpu_clone, vrt);
         rv.set_group_move_animation_sequence(
             Arc::new(Mutex::new(sequence))
         );

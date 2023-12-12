@@ -9,3 +9,4 @@ edition = "2021"
 eframe = { version = "0.24", features = [] }
 cpulib = { path = "libs/cpulib" }
 egui_code_editor = { path = "libs/egui_code_editor" }
+lazy_static = "1.4"
