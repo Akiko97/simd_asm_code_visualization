@@ -571,7 +571,6 @@ impl RegVisualizer {
     pub fn move_animation_sequence(&mut self, ctx: &Context) {
         match self.receiver.try_recv() {
             Ok(AnimationControlMsg::ExecuteAnimation(index)) => {
-                println!("{}", index);
                 if self.sequence.is_none() {
                     self.sender.send(AnimationControlMsg::Terminate).unwrap();
                     return;
@@ -598,7 +597,6 @@ impl RegVisualizer {
                 }
             }
             Ok(AnimationControlMsg::Terminate) => {
-                println!("Terminate");
                 if let Some(s) = self.sequence.as_deref_mut() {
                     let mut s = s.to_vec();
                     s.remove(0);
