@@ -306,7 +306,13 @@ fn vaddps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Ar
 pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut AnimationFSM, rvd: &RegVisualizerData, ctx: &Context, instruction: &str) {
     // Parse operands and opcode
     let (opcode, operands) = split_instruction(instruction);
-    let operands = create_operands(operands);
+    let mut operands = create_operands(operands);
+    let vaddps_is_target_read = false;
+    if vaddps_is_target_read {
+        if let Some(target) = operands.first() {
+            operands.insert(0, target.clone());
+        }
+    }
     // Reset register highlight
     let mut rv_lock = rv.lock().unwrap();
     rv_lock.reset_highlight();
