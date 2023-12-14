@@ -188,7 +188,7 @@ impl Element {
         ui.painter().rect_stroke(
             Rect::from_min_size(self.position, rect_size),
             0.0,
-            egui::Stroke::new(2.0, if self.is_highlight {Color32::RED} else {self.border_color}),
+            egui::Stroke::new(2.0, if self.is_highlight {Color32::RED} else if self.animating {Color32::KHAKI} else {self.border_color}),
         );
         // Adaptive Text Size
         let mut font_size = 20f32;
