@@ -183,7 +183,7 @@ impl App for APP {
                     input.unstable_dt
                 });
                 let mut register_visualizer = self.register_visualizer.lock().unwrap();
-                register_visualizer.update(delta_time, self.reg_visualizer_data.velocity);
+                register_visualizer.update(delta_time, self.reg_visualizer_data.factor, self.reg_visualizer_data.min_speed, self.reg_visualizer_data.max_speed);
                 let cpu = self.cpu.lock().unwrap();
                 register_visualizer.show(ui, &self.reg_visualizer_data, &cpu);
                 drop(cpu);

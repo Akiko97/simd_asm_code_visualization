@@ -225,12 +225,15 @@ impl Element {
         );
         ui.painter().galley(text_pos, galley);
     }
-    fn update(&mut self, delta_time: f32, velocity: f32) {
+    fn update(&mut self, delta_time: f32, factor: f32, min_speed: f32, max_speed: f32) {
         let direction = self.target_position - self.position;
-        if direction.length() > 1.0 {
+        let distance = direction.length();
+        if distance > 1.0 {
             self.animating = true;
+            let base_speed = distance * factor;
+            let speed = base_speed.min(max_speed).max(min_speed);
             let normalized_direction = direction.normalized();
-            self.position += normalized_direction * velocity * delta_time;
+            self.position += normalized_direction * speed * delta_time;
         } else {
             self.position = self.target_position;
             self.animating = false;
@@ -355,18 +358,18 @@ macro_rules! show_element {
 }
 
 impl RegVisualizer {
-    pub fn update(&mut self, delta_time: f32, velocity: f32) {
+    pub fn update(&mut self, delta_time: f32, factor: f32, min_speed: f32, max_speed: f32) {
         self.elements.iter_mut().for_each(|(_, vec)| {
             vec.iter_mut().for_each(|elements| {
                 elements.iter_mut().for_each(|element| {
-                    element.update(delta_time, velocity);
+                    element.update(delta_time, factor, min_speed, max_speed);
                 });
             });
         });
         self.animation_elements.iter_mut().for_each(|(_, vec)| {
             vec.iter_mut().for_each(|elements| {
                 elements.iter_mut().for_each(|element| {
-                    element.update(delta_time, velocity);
+                    element.update(delta_time, factor, min_speed, max_speed);
                 });
             });
         });

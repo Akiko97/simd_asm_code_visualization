@@ -7,7 +7,9 @@ pub struct RegVisualizerData {
     pub registers: Vec<Vec<Register>>,
     pub vector_regs_type: HashMap<(VecRegName, usize), ValueType>,
     // Animation Data
-    pub velocity: f32,
+    pub factor: f32,
+    pub min_speed: f32,
+    pub max_speed: f32,
 }
 
 impl Default for RegVisualizerData {
@@ -17,7 +19,9 @@ impl Default for RegVisualizerData {
             registers: vec![vec![]],
             vector_regs_type: HashMap::new(),
             // Animation Data
-            velocity: 10f32,
+            factor: 1.0f32,
+            min_speed: 1.0f32,
+            max_speed: 20.0f32,
         }
     }
 }

@@ -74,7 +74,9 @@ fn drop_target<R>(
 }
 
 pub struct VisualizerSetting {
-    velocity: f32,
+    factor: f32,
+    min_speed: f32,
+    max_speed: f32,
     reg_type: RegType,
     gpr_name: GPRName,
     vec_name: VecRegName,
@@ -85,7 +87,9 @@ pub struct VisualizerSetting {
 impl Default for VisualizerSetting {
     fn default() -> Self {
         Self {
-            velocity: 0f32,
+            factor: 1.0f32,
+            min_speed: 1.0f32,
+            max_speed: 20.0f32,
             reg_type: RegType::Vector,
             gpr_name: GPRName::RAX,
             vec_name: VecRegName::YMM,
@@ -106,18 +110,36 @@ macro_rules! create_gpr_selectable {
 impl VisualizerSetting {
     pub fn show(&mut self, ui: &mut Ui, data: &mut RegVisualizerData) {
         // init
-        self.velocity = data.velocity;
+        self.factor = data.factor;
+        self.min_speed = data.min_speed;
+        self.max_speed = data.max_speed;
         // UI
-        ui.label("Setting Velocity:");
+        ui.label("Speed Setting:");
         let slider_response = ui.add(
-            Slider::new(&mut self.velocity, 10.0..=1000.0)
+            Slider::new(&mut self.factor, 0.1..=10.0)
                 .logarithmic(true)
-                .text("Velocity"),
+                .text("Speed Factor"),
         );
         if slider_response.changed() {
-            data.velocity = self.velocity;
+            data.factor = self.factor;
         }
-        ui.label("Setting Registers:");
+        let slider_response = ui.add(
+            Slider::new(&mut self.min_speed, 1.0..=10.0)
+                .logarithmic(true)
+                .text("Min Speed"),
+        );
+        if slider_response.changed() {
+            data.min_speed = self.min_speed;
+        }
+        let slider_response = ui.add(
+            Slider::new(&mut self.max_speed, 20.0..=100.0)
+                .logarithmic(true)
+                .text("Max Speed"),
+        );
+        if slider_response.changed() {
+            data.max_speed = self.max_speed;
+        }
+        ui.label("Registers Setting:");
         ui.horizontal(|ui| {
             ui.label("Type:");
             ui.selectable_value(&mut self.reg_type, RegType::Vector, "Vector");
