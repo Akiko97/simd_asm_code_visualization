@@ -216,6 +216,36 @@ fn vaddps(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName
     add_common::<u32>(cpu, vrt, operands[0].clone(), operands[1].clone(), operands[2].clone(), true);
 }
 
+fn vpaddd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 3 { return; }
+    add_common::<u32>(cpu, vrt, operands[0].clone(), operands[1].clone(), operands[2].clone(), false);
+}
+
+fn valignd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 4 { return; }
+    let target = operands[0].clone();
+    let source1 = operands[1].clone();
+    let source2 = operands[2].clone();
+    let imm8 = operands[3].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8))
+        = (target, source1, source2, imm8) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector {
+            let mut cpu = cpu.lock().unwrap();
+            let mut vec1 = cpu.registers.get_by_sections::<u32>(src1.get_vector().0, src1.get_vector().1).unwrap();
+            let mut vec2 = cpu.registers.get_by_sections::<u32>(src2.get_vector().0, src2.get_vector().1).unwrap();
+            let mut veca = vec2.clone();
+            veca.append(&mut vec1);
+            let mut veca = Vec::from(&veca[imm8 as usize..]);
+            if veca.len() > 16 {
+                veca = Vec::from(&veca[..16]);
+            } else {
+                veca.resize(16, 0);
+            }
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, veca);
+        }
+    }
+}
+
 fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<Value> {
     match reg.get_type() {
         RegType::GPR => {
@@ -304,6 +334,54 @@ fn vaddps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Ar
     add_common_animation(cpu, vrt, odd[0].clone(), odd[1].clone(), odd[2].clone())
 }
 
+fn vpaddd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 3 { return vec![(vec![], false)]; }
+    add_common_animation(cpu, vrt, odd[0].clone(), odd[1].clone(), odd[2].clone())
+}
+
+fn valignd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 4 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source1 = odd[1].clone();
+    let source2 = odd[2].clone();
+    let imm = odd[3].clone();
+    if let  (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8))
+        = (target.0, source1.0, source2.0, imm.0) {
+        if imm8 < 16 {
+            let s1v = get_values_from_register(src1, cpu.clone(), vrt.clone());
+            let s2v = get_values_from_register(src2, cpu.clone(), vrt.clone());
+            if s1v.len() == 16 && s2v.len() == 16 {
+                let s1v = Vec::from(&s1v[..imm8 as usize]); // high in result
+                let s2v = Vec::from(&s2v[imm8 as usize..]); // low in result
+                let mut v1 = vec![];
+                let mut j = 0;
+                for i in imm8 as usize..16 {
+                    // s2v
+                    add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, i,
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, j,
+                        |_| {});
+                    j += 1;
+                }
+                for i in 0..imm8 as usize {
+                    // s1v
+                    add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, i,
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, j,
+                        |_| {});
+                    j += 1;
+                }
+                let mut v2 = vec![];
+                for i in 0..16 {
+                    add_animation_data!(v2;
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                        dst, LayoutLocation::None, 0, i, |_| {});
+                }
+                return vec![(v1, false), (v2, false)];
+            }
+        }
+    }
+    vec![(vec![], false)]
+}
+
 type Func = fn(Arc<Mutex<CPU>>, Vec<Operand>, HashMap<(VecRegName, usize), ValueType>);
 type AniFunc = fn(Vec<(Operand, LayoutLocation, (usize, usize))>, Arc<Mutex<CPU>>, HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)>;
 
@@ -317,6 +395,8 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
 {
     let mut map = HashMap::new();
     new_instruction!(map; "vaddps", false, vaddps, vaddps_animation);
+    new_instruction!(map; "vpaddd", false, vpaddd, vpaddd_animation);
+    new_instruction!(map; "valignd", false, valignd, valignd_animation);
     map
 }
 

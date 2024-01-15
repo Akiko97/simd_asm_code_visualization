@@ -51,13 +51,14 @@ impl Default for APP {
             visualizer_setting: VisualizerSetting::default(),
             animation_fsm: AnimationFSM::default(),
             // Code Editor
-            code: "vaddps ymm0, ymm1, ymm0
-vaddps ymm0, ymm2, ymm0
-vaddps ymm0, ymm3, ymm0
-vhaddps ymm0, ymm0, ymm0
-vhaddps ymm0, ymm0, ymm0
-vperm2f128 ymm1, ymm0, ymm0, 1
-vaddps ymm0, ymm1, ymm0".into(),
+            code: "valignd zmm1, zmm0, zmm2, 15
+vpaddd zmm0, zmm0, zmm1
+valignd zmm1, zmm0, zmm2, 14
+vpaddd zmm0, zmm0, zmm1
+valignd zmm1, zmm0, zmm2, 12
+vpaddd zmm0, zmm0, zmm1
+valignd zmm1, zmm0, zmm2, 8
+vpaddd zmm0, zmm0, zmm1".into(),
             highlight: 0,
             // Layout
             show_sidebar: true,
@@ -171,12 +172,10 @@ impl App for APP {
                 // Debug
                 if ui.button("test").clicked() {
                     let mut cpu = self.cpu.lock().unwrap();
-                    cpu.registers.set_by_sections::<u32>(VecRegName::YMM, 0, Utilities::f32vec_to_u32vec(vec![
-                        1f32, 2f32, 3f32, 4f32, 5f32, 6f32, 7f32, 8f32
-                    ]));
-                    cpu.registers.set_by_sections::<u32>(VecRegName::YMM, 1, Utilities::f32vec_to_u32vec(vec![
-                        8f32, 7f32, 6f32, 5f32, 4f32, 3f32, 2f32, 1f32
-                    ]));
+                    cpu.registers.set_by_sections::<u32>(VecRegName::ZMM, 0, vec![
+                        1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32,
+                        9u32, 10u32, 11u32, 12u32, 13u32, 14u32, 15u32, 16u32
+                    ]);
                 }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
