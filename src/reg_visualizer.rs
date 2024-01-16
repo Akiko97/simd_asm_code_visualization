@@ -5,17 +5,21 @@ use eframe::egui::{self, Vec2, Pos2, Ui, Color32};
 use super::*;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
+fn get_y() -> f32 {
+    25f32
+}
+
 pub fn get_size_from_value(value: &Value) -> Vec2 {
     match value {
-        Value::U8(_) => {Vec2::new(15.0, 25.0)}
-        Value::U16(_) => {Vec2::new(30.0, 25.0)}
-        Value::U32(_) => {Vec2::new(60.0, 25.0)}
-        Value::U64(_) => {Vec2::new(120.0, 25.0)}
-        Value::U128(_) => {Vec2::new(240.0, 25.0)}
-        Value::U256(_) => {Vec2::new(480.0, 25.0)}
-        Value::U512(_) => {Vec2::new(920.0, 25.0)}
-        Value::F32(_) => {Vec2::new(60.0, 25.0)}
-        Value::F64(_) => {Vec2::new(120.0, 25.0)}
+        Value::U8(_) => {Vec2::new(15.0, get_y())}
+        Value::U16(_) => {Vec2::new(30.0, get_y())}
+        Value::U32(_) => {Vec2::new(60.0, get_y())}
+        Value::U64(_) => {Vec2::new(120.0, get_y())}
+        Value::U128(_) => {Vec2::new(240.0, get_y())}
+        Value::U256(_) => {Vec2::new(480.0, get_y())}
+        Value::U512(_) => {Vec2::new(920.0, get_y())}
+        Value::F32(_) => {Vec2::new(60.0, get_y())}
+        Value::F64(_) => {Vec2::new(120.0, get_y())}
     }
 }
 
@@ -387,9 +391,11 @@ impl RegVisualizer {
                 ui.horizontal(|ui| {
                     let mut layout_vec = vec![];
                     (0..data_size).for_each(|_| {
-                        let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
-                        ui.painter().rect_filled(layout_rect, 0.0, Color32::LIGHT_BLUE);
-                        layout_vec.push((layout_rect.min, size));
+                        ui.vertical(|ui| {
+                            let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
+                            // ui.painter().rect_filled(layout_rect, 0.0, Color32::LIGHT_BLUE);
+                            layout_vec.push((layout_rect.min, size));
+                        });
                     });
                     layout_vecs.push(layout_vec);
                 });
@@ -433,7 +439,7 @@ impl RegVisualizer {
 
     pub fn show(&mut self, ui: &mut Ui, ctx: &Context, data: &RegVisualizerData, cpu: &CPU) {
         // Get Animation Layout Size(Y)
-        let mut animation_size_y = 25f32;
+        let mut animation_size_y = get_y();
         match self.destroy_receiver.try_recv() {
             Ok(DestroyLayoutMsg::Next(y)) => {
                 if animation_size_y - y < 0.1f32 {
@@ -441,7 +447,7 @@ impl RegVisualizer {
                     self.destroy_sender.send(DestroyLayoutMsg::Finish).unwrap();
                 } else {
                     animation_size_y -= y;
-                    self.destroy_sender.send(DestroyLayoutMsg::Next(y + 0.01f32)).unwrap();
+                    self.destroy_sender.send(DestroyLayoutMsg::Next(y + 0.1f32)).unwrap();
                 }
             },
             Ok(DestroyLayoutMsg::Finish) => {
