@@ -223,7 +223,7 @@ fn main() {
     wasm_bindgen_futures::spawn_local(async {
         eframe::WebRunner::new()
             .start(
-                "the_canvas_id", // hardcode it
+                "the_canvas_id",
                 web_options,
                 Box::new(|cc| Box::new(APP::default())),
             )
