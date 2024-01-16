@@ -147,12 +147,54 @@ vpaddd zmm0, zmm0, zmm1".into();
                             9u32, 10u32, 11u32, 12u32, 13u32, 14u32, 15u32, 16u32
                         ]);
                         drop(cpu);
-                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, 0));
-                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, 1));
-                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, 2));
-                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, 0), ValueType::U32);
-                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, 1), ValueType::U32);
-                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, 2), ValueType::U32);
+                        (0..3).for_each(|i| {
+                            self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, i));
+                        });
+                        (0..3).for_each(|i| {
+                            self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, i), ValueType::U32);
+                        });
+                    }
+                    if ui.button("Matrix Transpose").clicked() {
+                        self.code = "vunpcklps ymm8, ymm0, ymm1
+vunpcklps ymm9, ymm2, ymm3
+vunpcklps ymm10, ymm4, ymm5
+vunpcklps ymm11, ymm6, ymm7
+vunpckhps ymm12, ymm0, ymm1
+vunpckhps ymm13, ymm2, ymm3
+vunpckhps ymm14, ymm4, ymm5
+vunpckhps ymm15, ymm6, ymm7
+vshufps ymm0, ymm8, ymm9, 0b01000100
+vshufps ymm1, ymm8, ymm9, 0b11101110
+vshufps ymm2, ymm10, ymm11, 0b01000100
+vshufps ymm3, ymm10, ymm11, 0b11101110
+vshufps ymm4, ymm12, ymm13, 0b01000100
+vshufps ymm5, ymm12, ymm13, 0b11101110
+vshufps ymm6, ymm14, ymm15, 0b01000100
+vshufps ymm7, ymm14, ymm15, 0b11101110
+vperm2f128 ymm8, ymm0, ymm2, 0x20
+vperm2f128 ymm9, ymm1, ymm3, 0x20
+vperm2f128 ymm10, ymm0, ymm2, 0x31
+vperm2f128 ymm11, ymm1, ymm3, 0x31
+vperm2f128 ymm12, ymm4, ymm6, 0x20
+vperm2f128 ymm13, ymm5, ymm7, 0x20
+vperm2f128 ymm14, ymm4, ymm6, 0x31
+vperm2f128 ymm15, ymm5, ymm7, 0x31".into();
+                        let mut cpu = self.cpu.lock().unwrap();
+                        (0u32..16u32).for_each(|i| {
+                            let vec = if i < 8 {
+                                ((i * 8 + 1)..(i * 8 + 9)).map(|x| x).collect()
+                            } else {
+                                vec![0; 8]
+                            };
+                            cpu.registers.set_by_sections::<u32>(VecRegName::YMM, i as usize, vec);
+                        });
+                        drop(cpu);
+                        (0..16).for_each(|i| {
+                            self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::YMM, i));
+                        });
+                        (0..16).for_each(|i| {
+                            self.reg_visualizer_data.vector_regs_type.insert((VecRegName::YMM, i), ValueType::U32);
+                        });
                     }
                 });
             });
