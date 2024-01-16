@@ -293,12 +293,15 @@ pub struct RegVisualizer {
     finish_sender: Sender<ElementAnimationFinishMsg>,
     finish_receiver: Receiver<ElementAnimationFinishMsg>,
     sequence_finished_callback: Option<Box<dyn FnOnce() + Send + 'static>>,
+    destroy_sender: Sender<DestroyLayoutMsg>,
+    destroy_receiver: Receiver<DestroyLayoutMsg>,
 }
 
 impl Default for RegVisualizer {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel();
         let (finish_sender, finish_receiver) = mpsc::channel();
+        let (destroy_sender, destroy_receiver) = mpsc::channel();
         Self {
             // Visualization Data
             layout_data: HashMap::new(),
@@ -314,6 +317,8 @@ impl Default for RegVisualizer {
             finish_sender,
             finish_receiver,
             sequence_finished_callback: None,
+            destroy_sender,
+            destroy_receiver,
         }
     }
 }
@@ -383,10 +388,10 @@ impl RegVisualizer {
                     let mut layout_vec = vec![];
                     (0..data_size).for_each(|_| {
                         let (layout_rect, _response) = ui.allocate_exact_size(size, Sense::hover());
+                        ui.painter().rect_filled(layout_rect, 0.0, Color32::LIGHT_BLUE);
                         layout_vec.push((layout_rect.min, size));
                     });
                     layout_vecs.push(layout_vec);
-
                 });
             });
             layout_data.insert(key.clone(), layout_vecs);
@@ -426,7 +431,24 @@ impl RegVisualizer {
         }
     }
 
-    pub fn show(&mut self, ui: &mut Ui, data: &RegVisualizerData, cpu: &CPU) {
+    pub fn show(&mut self, ui: &mut Ui, ctx: &Context, data: &RegVisualizerData, cpu: &CPU) {
+        // Get Animation Layout Size(Y)
+        let mut animation_size_y = 25f32;
+        match self.destroy_receiver.try_recv() {
+            Ok(DestroyLayoutMsg::Next(y)) => {
+                if animation_size_y - y < 0.1f32 {
+                    animation_size_y = 0f32;
+                    self.destroy_sender.send(DestroyLayoutMsg::Finish).unwrap();
+                } else {
+                    animation_size_y -= y;
+                    self.destroy_sender.send(DestroyLayoutMsg::Next(y + 0.01f32)).unwrap();
+                }
+            },
+            Ok(DestroyLayoutMsg::Finish) => {
+                self.destroy_sender.send(DestroyLayoutMsg::Finish).unwrap();
+            }
+            _ => { }
+        }
         // Layout & Update Elements
         ui.vertical(|ui| {
             data.registers[0].iter().for_each(|reg| {
@@ -456,22 +478,24 @@ impl RegVisualizer {
                 }
                 // Show UI
                 ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0; // Set spaces between elements to 0(x)
+                    ui.spacing_mut().item_spacing.y = 5.0; // Set spaces between elements to 5(y)
                     ui.label(get_reg_name(reg).clone());
-                    ui.spacing_mut().item_spacing.x = 0.0; // Set spaces between elements to 0
                     let location = if let Some(config) = self.animation_config.get(reg) {
                         config.location
                     } else {
                         LayoutLocation::None
                     };
-                    let size = get_size_from_value(&values[0]);
                     let repeat_number = if let Some(config) = self.animation_config.get(reg) {
                         config.repeat_numbers
                     } else {
                         (0, 0)
                     };
+                    let size = get_size_from_value(&values[0]);
+                    let animation_size = Vec2::new(size.x, animation_size_y);
                     // Animation Layout - TOP
                     if location == LayoutLocation::TOP || location == LayoutLocation::BOTH {
-                        RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::TOP), values.len(), repeat_number.0, &mut self.animation_layout_data);
+                        RegVisualizer::create_layout(ui, animation_size, &(reg.clone(), LayoutLocation::TOP), values.len(), repeat_number.0, &mut self.animation_layout_data);
                         RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::TOP), reg, &self.animation_layout_data, &mut self.animation_elements, false);
                     }
                     // Elements Layout
@@ -479,7 +503,7 @@ impl RegVisualizer {
                     RegVisualizer::create_elements(&values, reg, reg, &self.layout_data, &mut self.elements, true);
                     // Animation Layout - BOTTOM
                     if location == LayoutLocation::BOTTOM || location == LayoutLocation::BOTH {
-                        RegVisualizer::create_layout(ui, size, &(reg.clone(), LayoutLocation::BOTTOM), values.len(), repeat_number.1, &mut self.animation_layout_data);
+                        RegVisualizer::create_layout(ui, animation_size, &(reg.clone(), LayoutLocation::BOTTOM), values.len(), repeat_number.1, &mut self.animation_layout_data);
                         RegVisualizer::create_elements(&values, &(reg.clone(), LayoutLocation::BOTTOM), reg, &self.animation_layout_data, &mut self.animation_elements, false);
                     }
                 });
@@ -570,6 +594,18 @@ impl RegVisualizer {
                 }
             }
         });
+        // Destroy Animation Layout
+        match self.destroy_receiver.try_recv() {
+            Ok(DestroyLayoutMsg::Finish) => {
+                self.animation_config.clear();
+                ctx.request_repaint();
+            },
+            Ok(DestroyLayoutMsg::Next(f)) => {
+                ctx.request_repaint();
+                self.destroy_sender.send(DestroyLayoutMsg::Next(f)).unwrap();
+            }
+            _ => {}
+        }
     }
     pub fn move_animation_sequence(&mut self, ctx: &Context) {
         match self.receiver.try_recv() {
@@ -702,10 +738,21 @@ impl RegVisualizer {
         self.animation_config.insert(reg.clone(), RegAnimationConfig::default().with_location(location).with_repeat_numbers(repeat_numbers));
         ctx.request_repaint();
     }
-    pub fn remove_animation_layout(&mut self, reg: &Register, ctx: &Context) {
+    pub fn remove_animation_layout_for_register(&mut self, reg: &Register, ctx: &Context) {
         self.animation_config.remove(reg);
         ctx.request_repaint();
     }
+
+    pub fn remove_animation_layout(&mut self, ctx: &Context) {
+        self.animation_elements.iter_mut().for_each(|(_, elementss)| {
+            elementss.iter_mut().for_each(|elements| {
+                elements.iter_mut().for_each(|element| element.display = false);
+            });
+        });
+        ctx.request_repaint();
+        self.destroy_sender.send(DestroyLayoutMsg::Next(0.1f32)).unwrap();
+    }
+
     pub fn change_animation_elements_layer_with_number(&mut self, key: &(Register, LayoutLocation), number: usize, layer_order: ElementOrder) {
         if let Some(elements_vec) = self.animation_elements.get_mut(key) {
             if number < elements_vec.len() {
@@ -864,6 +911,11 @@ enum AnimationControlMsg {
 
 enum ElementAnimationFinishMsg {
     SetTarget((Register, LayoutLocation, usize, usize), (Register, LayoutLocation, usize, usize)),
+}
+
+enum DestroyLayoutMsg {
+    Next(f32),
+    Finish,
 }
 
 impl RegVisualizer {

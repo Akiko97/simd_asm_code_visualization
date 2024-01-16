@@ -544,8 +544,8 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
     let reg_operand_data_clone = reg_operand_data.clone();
     fsm.set_destroy_layout(move |fsm| {
         let mut rv = rv_clone.lock().unwrap();
+        rv.remove_animation_layout(&ctx_clone);
         reg_operand_data_clone.iter().for_each(|(reg, (_, loc, rn, is_target))| {
-            rv.remove_animation_layout(reg, &ctx_clone);
             if *is_target {
                 rv.highlight(reg);
             }
