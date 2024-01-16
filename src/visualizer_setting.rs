@@ -89,7 +89,7 @@ impl Default for VisualizerSetting {
         Self {
             factor: 1.0f32,
             min_speed: 1.0f32,
-            max_speed: 20.0f32,
+            max_speed: 1000.0f32,
             reg_type: RegType::Vector,
             gpr_name: GPRName::RAX,
             vec_name: VecRegName::YMM,
@@ -124,7 +124,7 @@ impl VisualizerSetting {
             data.factor = self.factor;
         }
         let slider_response = ui.add(
-            Slider::new(&mut self.min_speed, 1.0..=10.0)
+            Slider::new(&mut self.min_speed, 1.0..=100.0)
                 .logarithmic(true)
                 .text("Min Speed"),
         );
@@ -132,7 +132,7 @@ impl VisualizerSetting {
             data.min_speed = self.min_speed;
         }
         let slider_response = ui.add(
-            Slider::new(&mut self.max_speed, 20.0..=100.0)
+            Slider::new(&mut self.max_speed, 1000.0..=10000.0)
                 .logarithmic(true)
                 .text("Max Speed"),
         );

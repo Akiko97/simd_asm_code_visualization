@@ -21,7 +21,7 @@ impl Default for RegVisualizerData {
             // Animation Data
             factor: 1.0f32,
             min_speed: 1.0f32,
-            max_speed: 20.0f32,
+            max_speed: 1000.0f32,
         }
     }
 }
