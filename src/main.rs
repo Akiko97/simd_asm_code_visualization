@@ -51,14 +51,7 @@ impl Default for APP {
             visualizer_setting: VisualizerSetting::default(),
             animation_fsm: AnimationFSM::default(),
             // Code Editor
-            code: "valignd zmm1, zmm0, zmm2, 15
-vpaddd zmm0, zmm0, zmm1
-valignd zmm1, zmm0, zmm2, 14
-vpaddd zmm0, zmm0, zmm1
-valignd zmm1, zmm0, zmm2, 12
-vpaddd zmm0, zmm0, zmm1
-valignd zmm1, zmm0, zmm2, 8
-vpaddd zmm0, zmm0, zmm1".into(),
+            code: "".into(),
             highlight: 0,
             // Layout
             show_sidebar: true,
@@ -138,6 +131,29 @@ impl App for APP {
                     if ui.button("Undo").clicked() {
                         //
                     }
+                    ui.label("For TEST:");
+                    if ui.button("Prefix Sum").clicked() {
+                        self.code = "valignd zmm1, zmm0, zmm2, 15
+vpaddd zmm0, zmm0, zmm1
+valignd zmm1, zmm0, zmm2, 14
+vpaddd zmm0, zmm0, zmm1
+valignd zmm1, zmm0, zmm2, 12
+vpaddd zmm0, zmm0, zmm1
+valignd zmm1, zmm0, zmm2, 8
+vpaddd zmm0, zmm0, zmm1".into();
+                        let mut cpu = self.cpu.lock().unwrap();
+                        cpu.registers.set_by_sections::<u32>(VecRegName::ZMM, 0, vec![
+                            1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32,
+                            9u32, 10u32, 11u32, 12u32, 13u32, 14u32, 15u32, 16u32
+                        ]);
+                        drop(cpu);
+                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, 0));
+                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, 1));
+                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, 2));
+                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, 0), ValueType::U32);
+                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, 1), ValueType::U32);
+                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, 2), ValueType::U32);
+                    }
                 });
             });
         }
@@ -169,14 +185,6 @@ impl App for APP {
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
             .open(&mut self.show_visualizer)
             .show(ctx, |ui| {
-                // Debug
-                if ui.button("test").clicked() {
-                    let mut cpu = self.cpu.lock().unwrap();
-                    cpu.registers.set_by_sections::<u32>(VecRegName::ZMM, 0, vec![
-                        1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32,
-                        9u32, 10u32, 11u32, 12u32, 13u32, 14u32, 15u32, 16u32
-                    ]);
-                }
                 // Show the register visualizer
                 let delta_time = ctx.input(|input|{
                     input.unstable_dt

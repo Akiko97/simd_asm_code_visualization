@@ -182,7 +182,7 @@ impl VisualizerSetting {
                     .show_ui(ui, |ui| {
                         ui.style_mut().wrap = Some(false);
                         ui.set_min_width(60.0);
-                        for i in 0..16 {
+                        for i in 0..31 {
                             ui.selectable_value(&mut self.vec_index, i, format!("{}", i));
                         }
                     });
