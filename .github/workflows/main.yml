@@ -18,7 +18,12 @@ jobs:
         toolchain: stable
         override: true
 
-    - name: Build Docs
+    - name: Install Trunk
+      run: |
+        cargo install --locked trunk
+        trunk version
+
+    - name: Build
       run: trunk build --release
 
     - name: Deploy to GitHub Pages
