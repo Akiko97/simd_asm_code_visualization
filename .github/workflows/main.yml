@@ -23,7 +23,9 @@ jobs:
         cargo install --locked trunk
 
     - name: Build
-      run: trunk build --release
+      run: |
+        git submodule update --remote
+        trunk build --release
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
