@@ -21,7 +21,6 @@ jobs:
     - name: Install Trunk
       run: |
         cargo install --locked trunk
-        trunk version
 
     - name: Build
       run: trunk build --release
