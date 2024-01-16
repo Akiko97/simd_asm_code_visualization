@@ -223,7 +223,7 @@ impl Element {
             egui::FontId::new(font_size, egui::FontFamily::Monospace),
             Color32::BLACK,
         );
-        ui.painter().galley(text_pos, galley);
+        ui.painter().galley(text_pos, galley, Color32::TRANSPARENT);
     }
     fn update(&mut self, delta_time: f32, factor: f32, min_speed: f32, max_speed: f32) {
         let direction = self.target_position - self.position;
