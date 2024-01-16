@@ -3,7 +3,7 @@
 
 use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
-use eframe::{App, Frame, NativeOptions};
+use eframe::{App, Frame};
 use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel, Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Shape, Rect, epaint, Label, Slider, ComboBox, Color32};
 use std::sync::{Arc, Mutex};
 
@@ -204,8 +204,9 @@ impl App for APP {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() -> Result<(), eframe::Error> {
-    let options = NativeOptions {
+    let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1200f32, 800f32]),
         ..Default::default()
     };
@@ -214,4 +215,19 @@ fn main() -> Result<(), eframe::Error> {
         options,
         Box::new(|_cc| Box::new(APP::default())),
     )
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    let web_options = eframe::WebOptions::default();
+    wasm_bindgen_futures::spawn_local(async {
+        eframe::WebRunner::new()
+            .start(
+                "the_canvas_id", // hardcode it
+                web_options,
+                Box::new(|cc| Box::new(APP::default())),
+            )
+            .await
+            .expect("failed to start eframe");
+    });
 }
