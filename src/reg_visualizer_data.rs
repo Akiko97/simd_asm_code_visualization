@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use cpulib::{GPRName, VecRegName};
+use cpulib::{VecRegName};
 use crate::utilities::{Register, ValueType};
 
 pub struct RegVisualizerData {

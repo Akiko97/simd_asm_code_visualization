@@ -1,5 +1,5 @@
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, Sender};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum AnimationFSMState {

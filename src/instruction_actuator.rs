@@ -167,7 +167,7 @@ fake_float_calc!(u128);
 fake_float_calc!(u256);
 fake_float_calc!(u512);
 
-fn add_common<T>(cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>, target: Operand, source1: Operand, source2: Operand, is_float: bool)
+fn add_common<T>(cpu: Arc<Mutex<CPU>>, _vrt: HashMap<(VecRegName, usize), ValueType>, target: Operand, source1: Operand, source2: Operand, is_float: bool)
     where Vec<T>: FromIterator<<T as Add>::Output>, T: SectionCompatible + Add + FloatCalc
 {
     match target {
@@ -203,7 +203,7 @@ fn add_common<T>(cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueTy
                     };
                     cpu.registers.set_gpr_value(dst.get_gpr(), result);
                 }
-            } else if let (Operand::Reg(src1), Operand::Mem(src2)) = (source1.clone(), source2.clone()) {
+            } else if let (Operand::Reg(_src1), Operand::Mem(_src2)) = (source1.clone(), source2.clone()) {
                 todo!()
             }
         }
@@ -221,7 +221,7 @@ fn vpaddd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName
     add_common::<u32>(cpu, vrt, operands[0].clone(), operands[1].clone(), operands[2].clone(), false);
 }
 
-fn valignd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+fn valignd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
     if operands.len() != 4 { return; }
     let target = operands[0].clone();
     let source1 = operands[1].clone();
@@ -275,7 +275,7 @@ fn add_common_animation(cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), 
                         source1: (Operand, LayoutLocation, (usize, usize)),
                         source2: (Operand, LayoutLocation, (usize, usize))) -> Vec<(Vec<ElementAnimationData>, bool)>
 {
-    match target.0 {
+    return match target.0 {
         Operand::Reg(tgt) => {
             if let (Operand::Reg(src1), Operand::Reg(src2)) = (source1.0.clone(), source2.0.clone()) {
                 if src1.get_type() == src2.get_type() {
@@ -283,7 +283,7 @@ fn add_common_animation(cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), 
                     let s2v = get_values_from_register(src2, cpu.clone(), vrt.clone());
                     let s1l = s1v.len();
                     let s2l = s2v.len();
-                    let l = s1l + s2l;
+                    let _l = s1l + s2l;
                     let mut v1 = vec![];
                     for i in 0..s1l {
                         add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, i,
@@ -319,13 +319,13 @@ fn add_common_animation(cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), 
                         tgt, LayoutLocation::None, 0, |_| {});
                     return vec![(v1, false), (v2, false)];
                 }
-            } else if let (Operand::Reg(src1), Operand::Mem(src2)) = (source1.0.clone(), source2.0.clone()) {
+            } else if let (Operand::Reg(_src1), Operand::Mem(_src2)) = (source1.0.clone(), source2.0.clone()) {
                 todo!()
             }
             // Error
-            return vec![(vec![], false)];
+            vec![(vec![], false)]
         }
-        _ => return vec![(vec![], false)],
+        _ => vec![(vec![], false)],
     }
 }
 
@@ -351,8 +351,8 @@ fn valignd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: A
             let s1v = get_values_from_register(src1, cpu.clone(), vrt.clone());
             let s2v = get_values_from_register(src2, cpu.clone(), vrt.clone());
             if s1v.len() == 16 && s2v.len() == 16 {
-                let s1v = Vec::from(&s1v[..imm8 as usize]); // high in result
-                let s2v = Vec::from(&s2v[imm8 as usize..]); // low in result
+                let _s1v = Vec::from(&s1v[..imm8 as usize]); // high in result
+                let _s2v = Vec::from(&s2v[imm8 as usize..]); // low in result
                 let mut v1 = vec![];
                 let mut j = 0;
                 for i in imm8 as usize..16 {

@@ -18,7 +18,7 @@ use reg_visualizer::{RegVisualizer, LayoutLocation, ElementAnimationData};
 use visualizer_setting::{VisualizerSetting};
 use utilities::*;
 use reg_visualizer_data::RegVisualizerData;
-use crate::animation_fsm::{AnimationFSM, FSMCtrlMsg};
+use crate::animation_fsm::{AnimationFSM};
 use instruction_actuator::*;
 
 struct APP {
