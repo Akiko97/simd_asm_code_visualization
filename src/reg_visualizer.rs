@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Mutex;
-use eframe::egui::{self, Vec2, Pos2, Ui, Color32};
+use eframe::egui::{self, Vec2, Pos2, Ui, Color32, Stroke};
 use super::*;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
@@ -25,22 +25,22 @@ pub fn get_size_from_value(value: &Value) -> Vec2 {
 
 fn get_color(reg: &String) -> Color32 {
     match reg.as_str() {
-        "XMM0" | "YMM0" | "ZMM0" | "RAX" | "EAX" | "AX" | "AH" | "AL" => Color32::from_rgb(255, 255, 255),
-        "XMM1" | "YMM1" | "ZMM1" | "RBX" | "EBX" | "BX" | "BH" | "BL" => Color32::from_rgb(255, 255, 255),
-        "XMM2" | "YMM2" | "ZMM2" | "RCX" | "ECX" | "CX" | "CH" | "CL" => Color32::from_rgb(255, 255, 255),
-        "XMM3" | "YMM3" | "ZMM3" | "RDX" | "EDX" | "DX" | "DH" | "DL" => Color32::from_rgb(255, 255, 255),
-        "XMM4" | "YMM4" | "ZMM4" | "RSI" | "ESI" | "SI" | "SIL" => Color32::from_rgb(255, 255, 255),
-        "XMM5" | "YMM5" | "ZMM5" | "RDI" | "EDI" | "DI" | "DIL" => Color32::from_rgb(255, 255, 255),
-        "XMM6" | "YMM6" | "ZMM6" | "RBP" | "EBP" | "BP" | "BPL" => Color32::from_rgb(255, 255, 255),
-        "XMM7" | "YMM7" | "ZMM7" | "RSP" | "ESP" | "SP" | "SPL" => Color32::from_rgb(255, 255, 255),
-        "XMM8" | "YMM8" | "ZMM8" | "R8" | "R8D" | "R8W" | "R8B" => Color32::from_rgb(255, 255, 255),
-        "XMM9" | "YMM9" | "ZMM9" | "R9" | "R9D" | "R9W" | "R9B" => Color32::from_rgb(255, 255, 255),
-        "XMM10" | "YMM10" | "ZMM10" | "R10" | "R10D" | "R10W" | "R10B" => Color32::from_rgb(255, 255, 255),
-        "XMM11" | "YMM11" | "ZMM11" | "R11" | "R11D" | "R11W" | "R11B" => Color32::from_rgb(255, 255, 255),
-        "XMM12" | "YMM12" | "ZMM12" | "R12" | "R12D" | "R12W" | "R12B" => Color32::from_rgb(255, 255, 255),
-        "XMM13" | "YMM13" | "ZMM13" | "R13" | "R13D" | "R13W" | "R13B" => Color32::from_rgb(255, 255, 255),
-        "XMM14" | "YMM14" | "ZMM14" | "R14" | "R14D" | "R14W" | "R14B" => Color32::from_rgb(255, 255, 255),
-        "XMM15" | "YMM15" | "ZMM15" | "R15" | "R15D" | "R15W" | "R15B" => Color32::from_rgb(255, 255, 255),
+        "XMM0" | "YMM0" | "ZMM0" | "RAX" | "EAX" | "AX" | "AH" | "AL" => Color32::GRAY,
+        "XMM1" | "YMM1" | "ZMM1" | "RBX" | "EBX" | "BX" | "BH" | "BL" => Color32::GRAY,
+        "XMM2" | "YMM2" | "ZMM2" | "RCX" | "ECX" | "CX" | "CH" | "CL" => Color32::GRAY,
+        "XMM3" | "YMM3" | "ZMM3" | "RDX" | "EDX" | "DX" | "DH" | "DL" => Color32::GRAY,
+        "XMM4" | "YMM4" | "ZMM4" | "RSI" | "ESI" | "SI" | "SIL" => Color32::GRAY,
+        "XMM5" | "YMM5" | "ZMM5" | "RDI" | "EDI" | "DI" | "DIL" => Color32::GRAY,
+        "XMM6" | "YMM6" | "ZMM6" | "RBP" | "EBP" | "BP" | "BPL" => Color32::GRAY,
+        "XMM7" | "YMM7" | "ZMM7" | "RSP" | "ESP" | "SP" | "SPL" => Color32::GRAY,
+        "XMM8" | "YMM8" | "ZMM8" | "R8" | "R8D" | "R8W" | "R8B" => Color32::GRAY,
+        "XMM9" | "YMM9" | "ZMM9" | "R9" | "R9D" | "R9W" | "R9B" => Color32::GRAY,
+        "XMM10" | "YMM10" | "ZMM10" | "R10" | "R10D" | "R10W" | "R10B" => Color32::GRAY,
+        "XMM11" | "YMM11" | "ZMM11" | "R11" | "R11D" | "R11W" | "R11B" => Color32::GRAY,
+        "XMM12" | "YMM12" | "ZMM12" | "R12" | "R12D" | "R12W" | "R12B" => Color32::GRAY,
+        "XMM13" | "YMM13" | "ZMM13" | "R13" | "R13D" | "R13W" | "R13B" => Color32::GRAY,
+        "XMM14" | "YMM14" | "ZMM14" | "R14" | "R14D" | "R14W" | "R14B" => Color32::GRAY,
+        "XMM15" | "YMM15" | "ZMM15" | "R15" | "R15D" | "R15W" | "R15B" => Color32::GRAY,
         _ => Color32::TRANSPARENT,
     }
 }
@@ -182,6 +182,26 @@ impl Element {
 impl Element {
     fn show(&self, ui: &mut Ui) {
         let rect_size = get_size_from_value(&self.value);
+        // Link
+        let start = self.position + Vec2::new(rect_size.x / 2f32, rect_size.y / 2f32);
+        let end = self.target_position + Vec2::new(rect_size.x / 2f32, rect_size.y / 2f32);
+        let stroke = Stroke::new(2.0, Color32::LIGHT_BLUE);
+        ui.painter().line_segment([start, end], stroke);
+        let arrow_head_length = 10.0;
+        let arrow_head_width = 5.0;
+        let direction = (end - start).normalized();
+        let head_base = end - direction * arrow_head_length;
+        let normal = Vec2::new(-direction.y, direction.x);
+        let points = [
+            end,
+            head_base + normal * arrow_head_width,
+            head_base - normal * arrow_head_width,
+        ];
+        ui.painter().add(epaint::PathShape::convex_polygon(
+            points.to_vec(),
+            Color32::LIGHT_BLUE,
+            Stroke::default(),
+        ));
         // Display Rectangle
         ui.painter().rect_filled(
             Rect::from_min_size(self.position, rect_size),

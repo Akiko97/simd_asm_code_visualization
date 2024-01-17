@@ -65,6 +65,7 @@ impl Default for APP {
 
 impl App for APP {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
+        ctx.set_visuals(egui::Visuals::dark()); // Use dark mode
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 if ui.button("Visualizer").triple_clicked() {
