@@ -1,7 +1,7 @@
 // DO NOT REMOVE - hide console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName};
+use cpulib::{CPU, Utilities, u256, u512, VecRegName, GPRName, FLAGSName};
 use egui_code_editor::{CodeEditor, ColorTheme, Syntax};
 use eframe::{App, Frame};
 use eframe::egui::{self, Vec2, Pos2, Context,  CentralPanel, Window, SidePanel, TopBottomPanel, Ui, Id, Sense, CursorIcon, LayerId, Order, InnerResponse, Shape, Rect, epaint, Label, Slider, ComboBox, Color32};
@@ -126,8 +126,31 @@ impl App for APP {
                         if self.highlight < self.code.lines().count() {
                             self.highlight += 1;
                             if self.highlight > 0 {
-                                execute(self.register_visualizer.clone(), self.cpu.clone(), &mut self.animation_fsm, &self.reg_visualizer_data, ctx,
-                                        self.code.lines().collect::<Vec<&str>>()[self.highlight - 1]);
+                                let instruction = self.code.lines().collect::<Vec<&str>>()[self.highlight - 1];
+                                let s: String = instruction.into();
+                                if s.ends_with(":") {
+                                    // Do nothing
+                                } else if s.starts_with("jne ") {
+                                    let cpu = self.cpu.lock().unwrap();
+                                    let flag = cpu.registers.get_flags_value(FLAGSName::RFLAGS);
+                                    drop(cpu);
+                                    let ctrl = (flag >> 6) & 0b1; // Get ZF
+                                    if ctrl == 0 {
+                                        let parts: Vec<&str> = s.split_whitespace().collect();
+                                        if parts.len() == 2 {
+                                            let label: String = (*parts.get(1).unwrap()).into();
+                                            self.code.lines().enumerate().for_each(|(index, tmp)| {
+                                                let mut tmp: String = tmp.into();
+                                                tmp.pop();
+                                                if label == tmp {
+                                                    self.highlight = index + 1;
+                                                }
+                                            });
+                                        }
+                                    }
+                                } else {
+                                    execute(self.register_visualizer.clone(), self.cpu.clone(), &mut self.animation_fsm, &self.reg_visualizer_data, ctx, instruction);
+                                }
                             }
                         } else {
                             self.highlight = 0;

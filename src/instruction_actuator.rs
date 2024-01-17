@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use std::convert::Into;
 use std::ops::Add;
 use std::sync::{Arc, Mutex};
-use cpulib::{CPU, VecRegName, GPRName, SectionCompatible, u256, u512};
+use cpulib::{CPU, VecRegName, GPRName, SectionCompatible, u256, u512, FLAGSName};
 use cpulib::Utilities;
 use eframe::egui::Context;
 use crate::animation_fsm::{AnimationFSM, FSMCtrlMsg};
@@ -746,6 +746,35 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
     // Parse operands and opcode
     let (opcode, operands) = split_instruction(instruction);
     let mut operands = create_operands(operands);
+    // CMP Instruction
+    if opcode == "cmp" {
+        if let (Operand::Reg(r1), Operand::Reg(r2)) = (operands[0].clone(), operands[1].clone()) {
+            let mut cpu = cpu.lock().unwrap();
+            let v1 = cpu.registers.get_gpr_value(r1.get_gpr());
+            let v2 = cpu.registers.get_gpr_value(r2.get_gpr());
+            let mut f = cpu.registers.get_flags_value(FLAGSName::RFLAGS);
+            if v1 == v2 {
+                f |= 0b1000000;
+                cpu.registers.set_flags_value(FLAGSName::RFLAGS, f);
+            } else {
+                f &= 0xFFFFFFBF;
+                cpu.registers.set_flags_value(FLAGSName::RFLAGS, f);
+            }
+        } else if let (Operand::Reg(r), Operand::Imm(imm)) = (operands[0].clone(), operands[1].clone()) {
+            let mut cpu = cpu.lock().unwrap();
+            let v = cpu.registers.get_gpr_value(r.get_gpr());
+            let mut f = cpu.registers.get_flags_value(FLAGSName::RFLAGS);
+            if v == imm {
+                f |= 0b1000000;
+                cpu.registers.set_flags_value(FLAGSName::RFLAGS, f);
+            } else {
+                f &= 0xFFFFFFBF;
+                cpu.registers.set_flags_value(FLAGSName::RFLAGS, f);
+            }
+        }
+        return;
+    }
+    // Other Instructions
     if !OPCODES.contains_key(&opcode) {
         println!("Unsupport opcode: {}", opcode);
         return;
@@ -756,6 +785,8 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
             operands.insert(0, target.clone());
         }
     }
+    // TODO: calc mem
+    //
     // Animation FSM
     // Update CPU data - must run update date
     let cpu_clone = cpu.clone();
