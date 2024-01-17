@@ -13,6 +13,7 @@ mod utilities;
 mod reg_visualizer_data;
 mod animation_fsm;
 mod instruction_actuator;
+mod mem_visualizer;
 
 use reg_visualizer::{RegVisualizer, LayoutLocation, ElementAnimationData};
 use visualizer_setting::{VisualizerSetting};
@@ -20,6 +21,7 @@ use utilities::*;
 use reg_visualizer_data::RegVisualizerData;
 use crate::animation_fsm::{AnimationFSM};
 use instruction_actuator::*;
+use mem_visualizer::{MemVisualizer};
 
 struct APP {
     // Data
@@ -29,6 +31,7 @@ struct APP {
     register_visualizer: Arc<Mutex<RegVisualizer>>,
     visualizer_setting: VisualizerSetting,
     animation_fsm: AnimationFSM,
+    memory_visualizer: MemVisualizer,
     // Code Editor
     code: String,
     highlight: usize,
@@ -53,6 +56,7 @@ impl Default for APP {
             register_visualizer: Arc::new(Mutex::new(RegVisualizer::default())),
             visualizer_setting: VisualizerSetting::default(),
             animation_fsm: AnimationFSM::default(),
+            memory_visualizer: MemVisualizer::default(),
             // Code Editor
             code: "".into(),
             highlight: 0,
@@ -198,6 +202,56 @@ vperm2f128 ymm15, ymm5, ymm7, 0x31".into();
                             self.reg_visualizer_data.vector_regs_type.insert((VecRegName::YMM, i), ValueType::U32);
                         });
                     }
+                    if ui.button("Matrix Multiplication").clicked() {
+                        self.code = "loop:
+vmovapd ymm15, [0x40000000 + rdi]
+vextractf128 xmm14, ymm15, 0
+vbroadcastsd ymm4, xmm14
+shufpd xmm14, xmm14, 1
+vbroadcastsd ymm5, xmm14
+vextractf128 xmm14, ymm15, 1
+vbroadcastsd ymm6, xmm14
+shufpd xmm14, xmm14, 1
+vbroadcastsd ymm7, xmm14
+vmulpd ymm7, ymm3, ymm7
+vfmadd213pd ymm6, ymm2, ymm7
+vfmadd213pd ymm5, ymm1, ymm6
+vfmadd213pd ymm4, ymm0, ymm5
+vmovapd [0x40000080 + rdi], ymm4
+add rdi, 32
+cmp rdi, 128
+jne loop".into();
+                        let mut cpu = self.cpu.lock().unwrap();
+                        cpu.registers.set_by_sections::<u64>(VecRegName::YMM, 0, Utilities::f64vec_to_u64vec(vec![
+                            16f64, 15f64, 14f64, 13f64,
+                        ]));
+                        cpu.registers.set_by_sections::<u64>(VecRegName::YMM, 1, Utilities::f64vec_to_u64vec(vec![
+                            12f64, 11f64, 10f64, 9f64,
+                        ]));
+                        cpu.registers.set_by_sections::<u64>(VecRegName::YMM, 2, Utilities::f64vec_to_u64vec(vec![
+                            8f64, 7f64, 6f64, 5f64,
+                        ]));
+                        cpu.registers.set_by_sections::<u64>(VecRegName::YMM, 3, Utilities::f64vec_to_u64vec(vec![
+                            4f64, 3f64, 2f64, 1f64,
+                        ]));
+                        cpu.memory.write_vec::<u64>(0x40000000, Utilities::f64vec_to_u64vec(vec![
+                            1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0,
+                        ]));
+                        drop(cpu);
+                        self.reg_visualizer_data.registers[0].clear();
+                        (0..8).for_each(|i| {
+                            self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::YMM, i));
+                        });
+                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::YMM, 15));
+                        self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::XMM, 14));
+                        self.reg_visualizer_data.registers[0].push(Register::gpr(GPRName::RDI));
+                        self.reg_visualizer_data.vector_regs_type.clear();
+                        (0..8).for_each(|i| {
+                            self.reg_visualizer_data.vector_regs_type.insert((VecRegName::YMM, i), ValueType::F64);
+                        });
+                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::YMM, 15), ValueType::F64);
+                        self.reg_visualizer_data.vector_regs_type.insert((VecRegName::XMM, 14), ValueType::F64);
+                    }
                 });
             });
         }
@@ -251,7 +305,9 @@ vperm2f128 ymm15, ymm5, ymm7, 0x31".into();
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
             .open(&mut self.show_memory)
             .show(ctx, |ui| {
-                ui.label("Memory");
+                let cpu = self.cpu.lock().unwrap();
+                self.memory_visualizer.show(ui, ctx, &cpu);
+                drop(cpu);
             });
         Window::new("About")
             .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
