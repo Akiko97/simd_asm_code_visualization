@@ -202,6 +202,11 @@ impl Element {
             Color32::LIGHT_BLUE,
             Stroke::default(),
         ));
+        // Link2
+        let start = self.layout_position + Vec2::new(rect_size.x / 2f32, rect_size.y / 2f32);
+        let end = self.position + Vec2::new(rect_size.x / 2f32, rect_size.y / 2f32);
+        let stroke = Stroke::new(0.3, Color32::LIGHT_BLUE);
+        ui.painter().line_segment([start, end], stroke);
         // Display Rectangle
         ui.painter().rect_filled(
             Rect::from_min_size(self.position, rect_size),
