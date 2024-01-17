@@ -11,6 +11,7 @@ use crate::reg_visualizer::{LayoutLocation, RegVisualizer};
 use crate::reg_visualizer_data::RegVisualizerData;
 use crate::utilities::{create_value, create_values, Register, RegType, Value, ValueType};
 use crate::{add_animation_data, vec_reg, ElementAnimationData, add_register_group_animation_data, gpr};
+use regex::Regex;
 
 fn split_instruction(instruction: &str) -> (String, Vec<String>) {
     let parts: Vec<&str> = instruction.splitn(2, ' ').collect();
@@ -29,18 +30,120 @@ fn split_instruction(instruction: &str) -> (String, Vec<String>) {
 #[derive(Clone, Eq, PartialEq)]
 enum Operand {
     Reg(Register),
-    Mem(String),
+    Mem(u64),
     Imm(u64),
 }
 
-fn create_operands(operands: Vec<String>) -> Vec<Operand> {
+fn get_gpr(str: String) -> Register {
+    match str.as_str() {
+        "RAX" => gpr!(RAX),
+        "RBX" => gpr!(RBX),
+        "RCX" => gpr!(RCX),
+        "RDX" => gpr!(RDX),
+        "RSI" => gpr!(RSI),
+        "RDI" => gpr!(RDI),
+        "RBP" => gpr!(RBP),
+        "RSP" => gpr!(RSP),
+        "R8" => gpr!(R8),
+        "R9" => gpr!(R9),
+        "R10" => gpr!(R10),
+        "R11" => gpr!(R11),
+        "R12" => gpr!(R12),
+        "R13" => gpr!(R13),
+        "R14" => gpr!(R14),
+        "R15" => gpr!(R15),
+        "EAX" => gpr!(EAX),
+        "EBX" => gpr!(EBX),
+        "ECX" => gpr!(ECX),
+        "EDX" => gpr!(EDX),
+        "ESI" => gpr!(ESI),
+        "EDI" => gpr!(EDI),
+        "EBP" => gpr!(EBP),
+        "ESP" => gpr!(ESP),
+        "R8D" => gpr!(R8D),
+        "R9D" => gpr!(R9D),
+        "R10D" => gpr!(R10D),
+        "R11D" => gpr!(R11D),
+        "R12D" => gpr!(R12D),
+        "R13D" => gpr!(R13D),
+        "R14D" => gpr!(R14D),
+        "R15D" => gpr!(R15D),
+        "AX" => gpr!(AX),
+        "BX" => gpr!(BX),
+        "CX" => gpr!(CX),
+        "DX" => gpr!(DX),
+        "SI" => gpr!(SI),
+        "DI" => gpr!(DI),
+        "BP" => gpr!(BP),
+        "SP" => gpr!(SP),
+        "R8W" => gpr!(R8W),
+        "R9W" => gpr!(R9W),
+        "R10W" => gpr!(R10W),
+        "R11W" => gpr!(R11W),
+        "R12W" => gpr!(R12W),
+        "R13W" => gpr!(R13W),
+        "R14W" => gpr!(R14W),
+        "R15W" => gpr!(R15W),
+        "AH" => gpr!(AH),
+        "BH" => gpr!(BH),
+        "CH" => gpr!(CH),
+        "DH" => gpr!(DH),
+        "AL" => gpr!(AL),
+        "BL" => gpr!(BL),
+        "CL" => gpr!(CL),
+        "DL" => gpr!(DL),
+        "SIL" => gpr!(SIL),
+        "DIL" => gpr!(DIL),
+        "BPL" => gpr!(BPL),
+        "SPL" => gpr!(SPL),
+        "R8B" => gpr!(R8B),
+        "R9B" => gpr!(R9B),
+        "R10B" => gpr!(R10B),
+        "R11B" => gpr!(R11B),
+        "R12B" => gpr!(R12B),
+        "R13B" => gpr!(R13B),
+        "R14B" => gpr!(R14B),
+        "R15B" => gpr!(R15B),
+        _ => panic!("Invalid GPR"),
+    }
+}
+
+fn create_operands(operands: Vec<String>, cpu: Arc<Mutex<CPU>>) -> Vec<Operand> {
     let mut operand_vec = vec![];
     operands.iter().for_each(|operand| {
         let operand = operand.to_uppercase();
         if operand.starts_with('[') && operand.ends_with(']') {
-            // Memory
+            // Memory: reg + offset, TODO: support full memory format
             let address = &operand[1..operand.len() - 1];
-            operand_vec.push(Operand::Mem(address.into()));
+            let mut address: String = address.into();
+            address = address.replace(" ", "");
+            address = address.to_uppercase();
+            let re = Regex::new(r"(0X[0-9a-fA-F]+|\d+|[a-zA-Z]+|[+\-*/])").unwrap();
+            let parts: Vec<&str> = re.find_iter(&*address).map(|m| m.as_str()).collect();
+            if parts.len() != 3 {
+                println!("Unsupported address format: {}", address);
+            }
+            let (number_str, operator, register_str) = if parts[0].chars().next().unwrap().is_digit(10) || &parts[0][0..2] == "0x" {
+                (parts[0], parts[1], parts[2])
+            } else {
+                (parts[2], parts[1], parts[0])
+            };
+            let number = if number_str.starts_with("0X") {
+                u64::from_str_radix(&number_str[2..], 16).expect("Invalid hex number")
+            } else {
+                number_str.parse::<u64>().expect("Invalid number")
+            };
+            let register = get_gpr(register_str.into());
+            let mut cpu = cpu.lock().unwrap();
+            let reg_value = cpu.registers.get_gpr_value(register.get_gpr());
+            let result = match operator {
+                "+" => number + reg_value,
+                "-" => number - reg_value,
+                "*" => number * reg_value,
+                "/" => number / reg_value,
+                _ => 0u64,
+            };
+            operand_vec.push(Operand::Mem(result));
         } else if operand.chars().all(|c| c.is_ascii_hexdigit() || c == 'X' || c == 'x') {
             // Immediate
             let imm = if operand.starts_with("0X") || operand.starts_with("0x") {
@@ -64,77 +167,7 @@ fn create_operands(operands: Vec<String>) -> Vec<Operand> {
             operand_vec.push(Operand::Reg(reg));
         } else {
             // GPR
-            let reg = match operand.as_str() {
-                "RAX" => gpr!(RAX),
-                "RBX" => gpr!(RBX),
-                "RCX" => gpr!(RCX),
-                "RDX" => gpr!(RDX),
-                "RSI" => gpr!(RSI),
-                "RDI" => gpr!(RDI),
-                "RBP" => gpr!(RBP),
-                "RSP" => gpr!(RSP),
-                "R8" => gpr!(R8),
-                "R9" => gpr!(R9),
-                "R10" => gpr!(R10),
-                "R11" => gpr!(R11),
-                "R12" => gpr!(R12),
-                "R13" => gpr!(R13),
-                "R14" => gpr!(R14),
-                "R15" => gpr!(R15),
-                "EAX" => gpr!(EAX),
-                "EBX" => gpr!(EBX),
-                "ECX" => gpr!(ECX),
-                "EDX" => gpr!(EDX),
-                "ESI" => gpr!(ESI),
-                "EDI" => gpr!(EDI),
-                "EBP" => gpr!(EBP),
-                "ESP" => gpr!(ESP),
-                "R8D" => gpr!(R8D),
-                "R9D" => gpr!(R9D),
-                "R10D" => gpr!(R10D),
-                "R11D" => gpr!(R11D),
-                "R12D" => gpr!(R12D),
-                "R13D" => gpr!(R13D),
-                "R14D" => gpr!(R14D),
-                "R15D" => gpr!(R15D),
-                "AX" => gpr!(AX),
-                "BX" => gpr!(BX),
-                "CX" => gpr!(CX),
-                "DX" => gpr!(DX),
-                "SI" => gpr!(SI),
-                "DI" => gpr!(DI),
-                "BP" => gpr!(BP),
-                "SP" => gpr!(SP),
-                "R8W" => gpr!(R8W),
-                "R9W" => gpr!(R9W),
-                "R10W" => gpr!(R10W),
-                "R11W" => gpr!(R11W),
-                "R12W" => gpr!(R12W),
-                "R13W" => gpr!(R13W),
-                "R14W" => gpr!(R14W),
-                "R15W" => gpr!(R15W),
-                "AH" => gpr!(AH),
-                "BH" => gpr!(BH),
-                "CH" => gpr!(CH),
-                "DH" => gpr!(DH),
-                "AL" => gpr!(AL),
-                "BL" => gpr!(BL),
-                "CL" => gpr!(CL),
-                "DL" => gpr!(DL),
-                "SIL" => gpr!(SIL),
-                "DIL" => gpr!(DIL),
-                "BPL" => gpr!(BPL),
-                "SPL" => gpr!(SPL),
-                "R8B" => gpr!(R8B),
-                "R9B" => gpr!(R9B),
-                "R10B" => gpr!(R10B),
-                "R11B" => gpr!(R11B),
-                "R12B" => gpr!(R12B),
-                "R13B" => gpr!(R13B),
-                "R14B" => gpr!(R14B),
-                "R15B" => gpr!(R15B),
-                _ => panic!("Invalid GPR"),
-            };
+            let reg = get_gpr(operand);
             operand_vec.push(Operand::Reg(reg));
         }
     });
@@ -745,7 +778,7 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
     drop(rv_lock);
     // Parse operands and opcode
     let (opcode, operands) = split_instruction(instruction);
-    let mut operands = create_operands(operands);
+    let mut operands = create_operands(operands, cpu.clone());
     // CMP Instruction
     if opcode == "cmp" {
         if let (Operand::Reg(r1), Operand::Reg(r2)) = (operands[0].clone(), operands[1].clone()) {
@@ -785,8 +818,6 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
             operands.insert(0, target.clone());
         }
     }
-    // TODO: calc mem
-    //
     // Animation FSM
     // Update CPU data - must run update date
     let cpu_clone = cpu.clone();

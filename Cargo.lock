@@ -2348,6 +2348,7 @@ dependencies = [
  "env_logger",
  "getrandom",
  "lazy_static",
+ "regex",
  "serde",
  "wasm-bindgen-futures",
 ]
