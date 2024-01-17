@@ -38,6 +38,9 @@ struct APP {
     show_settings: bool,
     show_visualizer: bool,
     show_memory: bool,
+    show_wip: bool,
+    show_about: bool,
+    show_help: bool,
 }
 
 impl Default for APP {
@@ -59,6 +62,9 @@ impl Default for APP {
             show_settings: false,
             show_visualizer: false,
             show_memory: false,
+            show_wip: false,
+            show_about: false,
+            show_help: true,
         }
     }
 }
@@ -69,15 +75,15 @@ impl App for APP {
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 if ui.button("Visualizer").triple_clicked() {
-                    todo!()
+                    self.show_about = true;
                 }
                 ui.add_space(20.0);
                 egui::menu::menu_button(ui, "File", |ui| {
                     if ui.button("Open..").clicked() {
-                        todo!()
+                        self.show_wip = true;
                     }
                     if ui.button("Save..").clicked() {
-                        todo!()
+                        self.show_wip = true;
                     }
                 });
                 egui::menu::menu_button(ui, "View", |ui| {
@@ -90,10 +96,10 @@ impl App for APP {
                 });
                 egui::menu::menu_button(ui, "Help", |ui| {
                     if ui.button("Help..").clicked() {
-                        todo!()
+                        self.show_help = true;
                     }
                     if ui.button("About").clicked() {
-                        todo!()
+                        self.show_about = true;
                     }
                 });
             });
@@ -102,22 +108,16 @@ impl App for APP {
             SidePanel::left("side_panel").show(ctx, |ui| {
                 ui.vertical(|ui| {
                     ui.label("Visualization Options:");
-                    if ui.button("Settings").clicked() {
-                        self.show_settings = true;
+                    if ui.selectable_label(self.show_settings, "Settings").clicked() {
+                        self.show_settings = !self.show_settings;
                     }
-                    if ui.button("Visualizer").clicked() {
-                        self.show_visualizer = true;
+                    if ui.selectable_label(self.show_visualizer, "Visualizer").clicked() {
+                        self.show_visualizer = !self.show_visualizer;
                     }
-                    if ui.button("Memory").clicked() {
-                        self.show_memory = true;
+                    if ui.selectable_label(self.show_memory, "Memory").clicked() {
+                        self.show_memory = !self.show_memory;
                     }
                     ui.label("Debug Options:");
-                    if ui.button("Settings").clicked() {
-                        //
-                    }
-                    if ui.button("Run").clicked() {
-                        //
-                    }
                     if ui.button("Step").clicked() {
                         if self.highlight < self.code.lines().count() {
                             self.highlight += 1;
@@ -129,10 +129,7 @@ impl App for APP {
                             self.highlight = 0;
                         }
                     }
-                    if ui.button("Undo").clicked() {
-                        //
-                    }
-                    ui.label("For TEST:");
+                    ui.label("DEMO:");
                     if ui.button("Prefix Sum").clicked() {
                         self.code = "valignd zmm1, zmm0, zmm2, 15
 vpaddd zmm0, zmm0, zmm1
@@ -255,6 +252,34 @@ vperm2f128 ymm15, ymm5, ymm7, 0x31".into();
             .open(&mut self.show_memory)
             .show(ctx, |ui| {
                 ui.label("Memory");
+            });
+        Window::new("About")
+            .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
+            .open(&mut self.show_about)
+            .show(ctx, |ui| {
+                ui.heading("PixelAssemblySIMD");
+                ui.label("PixelAssemblySIMD is a visualization tool for assembly language SIMD instructions, designed to help beginners and programmers understand SIMD operations. This project is part of Zhong's Master's thesis at Ueda Lab., the Department of Computer Science and Communications Engineering, the Graduate School of Fundamental Science and Engineering of Waseda University.");
+                ui.hyperlink_to("GitHub", "https://github.com/Akiko97/simd_asm_code_visualization");
+                ui.hyperlink_to("Demo", "https://www.gabzhong.dev/simd_asm_code_visualization/");
+                ui.add_space(12.0);
+                ui.vertical_centered(|ui| {
+                    ui.label("2024 | Built with Rust & egui");
+                });
+            });
+        Window::new("Help")
+            .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
+            .open(&mut self.show_help)
+            .show(ctx, |ui| {
+                ui.heading("README");
+                ui.label("You can quickly load a demo using the button under 'DEMO' on the sidebar. The tool is still in development, and currently supports all SIMD instructions used in the algorithms showcased in 'DEMO'. In the settings on the sidebar, you can customize the animation settings, including animation speed, the order of register display, and more.");
+                //ui.label("サイドバーの「DEMO」の下にあるボタンを使用して、デモをすばやく読み込むことができます。このツールはまだ開発中であり、現在「DEMO」で紹介されているアルゴリズムで使用されるすべてのSIMD命令をサポートしています。サイドバーの設定で、アニメーションの速度、レジスタ表示順序など、アニメーションの設定をカスタマイズすることができます。");
+                //ui.label("您可以使用侧边栏中“DEMO”下的按钮直接快速加载Demo。该工具仍在开发中，目前支持“DEMO”中展示的算法中使用的所有SIMD指令。在侧边栏的设置中您可以进行动画的设置，包括动画速度、寄存器展示顺序等。");
+            });
+        Window::new("Features WIP")
+            .default_pos(Pos2::new(ctx.available_rect().right() - 200.0, ctx.available_rect().top() + 20.0))
+            .open(&mut self.show_wip)
+            .show(ctx, |ui| {
+                ui.label("This feature is under development");
             });
     }
 }
