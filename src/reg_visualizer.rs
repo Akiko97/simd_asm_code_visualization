@@ -486,6 +486,7 @@ impl RegVisualizer {
                 ui.vertical(|ui| {
                     ui.spacing_mut().item_spacing.x = 0.0; // Set spaces between elements to 0(x)
                     ui.spacing_mut().item_spacing.y = 5.0; // Set spaces between elements to 5(y)
+                    ui.style_mut().spacing.item_spacing = egui::vec2(0.0, 0.0);
                     ui.label(get_reg_name(reg).clone());
                     let location = if let Some(config) = self.animation_config.get(reg) {
                         config.location

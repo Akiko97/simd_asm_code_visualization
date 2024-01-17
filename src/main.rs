@@ -147,9 +147,11 @@ vpaddd zmm0, zmm0, zmm1".into();
                             9u32, 10u32, 11u32, 12u32, 13u32, 14u32, 15u32, 16u32
                         ]);
                         drop(cpu);
+                        self.reg_visualizer_data.registers[0].clear();
                         (0..3).for_each(|i| {
                             self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::ZMM, i));
                         });
+                        self.reg_visualizer_data.vector_regs_type.clear();
                         (0..3).for_each(|i| {
                             self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, i), ValueType::U32);
                         });
@@ -189,9 +191,11 @@ vperm2f128 ymm15, ymm5, ymm7, 0x31".into();
                             cpu.registers.set_by_sections::<u32>(VecRegName::YMM, i as usize, vec);
                         });
                         drop(cpu);
+                        self.reg_visualizer_data.registers[0].clear();
                         (0..16).for_each(|i| {
                             self.reg_visualizer_data.registers[0].push(Register::vector(VecRegName::YMM, i));
                         });
+                        self.reg_visualizer_data.vector_regs_type.clear();
                         (0..16).for_each(|i| {
                             self.reg_visualizer_data.vector_regs_type.insert((VecRegName::YMM, i), ValueType::U32);
                         });
