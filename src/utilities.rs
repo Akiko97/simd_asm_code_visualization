@@ -21,6 +21,22 @@ pub enum ValueType {
     F64,
 }
 
+impl ValueType {
+    pub fn size(&self) -> usize {
+        match self {
+            ValueType::U8 => 8,
+            ValueType::U16 => 16,
+            ValueType::U32 => 32,
+            ValueType::U64 => 64,
+            ValueType::U128 => 128,
+            ValueType::U256 => 256,
+            ValueType::U512 => 512,
+            ValueType::F32 => 32,
+            ValueType::F64 => 64,
+        }
+    }
+}
+
 #[derive(Copy, Clone)]
 pub enum Value {
     U8(u8),

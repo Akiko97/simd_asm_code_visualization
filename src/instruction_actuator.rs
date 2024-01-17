@@ -41,12 +41,14 @@ fn create_operands(operands: Vec<String>) -> Vec<Operand> {
             // Memory
             let address = &operand[1..operand.len() - 1];
             operand_vec.push(Operand::Mem(address.into()));
-        } else if operand.chars().all(|c| c.is_ascii_hexdigit() || c == 'X') {
+        } else if operand.chars().all(|c| c.is_ascii_hexdigit() || c == 'X' || c == 'x') {
             // Immediate
-            let imm = if operand.starts_with("0X") {
+            let imm = if operand.starts_with("0X") || operand.starts_with("0x") {
                 u64::from_str_radix(&operand[2..], 16).expect("Invalid immediate")
+            } else if operand.starts_with("0B") || operand.starts_with("0b") {
+                u64::from_str_radix(&operand[2..], 2).expect("Invalid immediate")
             } else {
-                operand.parse::<u64>().expect("Invalid immediate")
+                u64::from_str_radix(operand.as_str(), 10).expect("Invalid immediate")
             };
             operand_vec.push(Operand::Imm(imm));
         } else if operand.starts_with("XMM") || operand.starts_with("YMM") || operand.starts_with("ZMM") {
@@ -246,6 +248,141 @@ fn valignd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegNa
     }
 }
 
+fn unpack_common(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>, is_high: bool) {
+    let target = operands[0].clone();
+    let source1 = operands[1].clone();
+    let source2 = operands[2].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2))
+        = (target, source1, source2) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            let mut cpu = cpu.lock().unwrap();
+            let interleave_dwords = if !is_high {
+                |src1: Vec<u32>, src2: Vec<u32>| -> Vec<u32> {
+                    let mut dst: Vec<u32> = vec![];
+                    dst.push(src1[0]);
+                    dst.push(src2[0]);
+                    dst.push(src1[1]);
+                    dst.push(src2[1]);
+                    dst
+                }
+            } else {
+                |src1: Vec<u32>, src2: Vec<u32>| -> Vec<u32> {
+                    let mut dst: Vec<u32> = vec![];
+                    dst.push(src1[2]);
+                    dst.push(src2[2]);
+                    dst.push(src1[3]);
+                    dst.push(src2[3]);
+                    dst
+                }
+            };
+            let v1 = cpu.registers.get_by_sections::<u32>(src1.get_vector().0, src1.get_vector().1).unwrap();
+            let v2 = cpu.registers.get_by_sections::<u32>(src2.get_vector().0, src2.get_vector().1).unwrap();
+            let vs = match dst.get_vector().0 {
+                VecRegName::XMM => {
+                    interleave_dwords(v1, v2)
+                },
+                VecRegName::YMM => {
+                    let mut tmp = vec![];
+                    tmp.append(&mut interleave_dwords(Vec::from(&v1[0..4]), Vec::from(&v2[0..4])));
+                    tmp.append(&mut interleave_dwords(Vec::from(&v1[4..8]), Vec::from(&v2[4..8])));
+                    tmp
+                },
+                VecRegName::ZMM => {
+                    let mut tmp = vec![];
+                    tmp.append(&mut interleave_dwords(Vec::from(&v1[0..4]), Vec::from(&v2[0..4])));
+                    tmp.append(&mut interleave_dwords(Vec::from(&v1[4..8]), Vec::from(&v2[4..8])));
+                    tmp.append(&mut interleave_dwords(Vec::from(&v1[8..12]), Vec::from(&v2[8..12])));
+                    tmp.append(&mut interleave_dwords(Vec::from(&v1[12..16]), Vec::from(&v2[12..16])));
+                    tmp
+                },
+            };
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, vs);
+        }
+    }
+}
+
+fn vunpcklps(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 3 { return; }
+    unpack_common(cpu, operands, vrt, false);
+}
+
+fn vunpckhps(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 3 { return; }
+    unpack_common(cpu, operands, vrt, true);
+}
+
+fn vshufps(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 4 { return; }
+    let target = operands[0].clone();
+    let source1 = operands[1].clone();
+    let source2 = operands[2].clone();
+    let imm = operands[3].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8))
+        = (target, source1, source2, imm) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            let mut cpu = cpu.lock().unwrap();
+            let mut imm8v = vec![];
+            [0u8, 2, 4, 6].iter().for_each(|i| {
+                let tmp = imm8 as u8 >> i;
+                imm8v.push((tmp & 0b00000011) as usize);
+            });
+            let s1v = cpu.registers.get_by_sections::<u32>(src1.get_vector().0, src1.get_vector().1).unwrap();
+            let s2v = cpu.registers.get_by_sections::<u32>(src2.get_vector().0, src2.get_vector().1).unwrap();
+            let mut dv = vec![];
+            match dst.get_vector().0 {
+                VecRegName::XMM => {todo!()}
+                VecRegName::YMM => {
+                    dv.push(s1v[imm8v[0]]);
+                    dv.push(s1v[imm8v[1]]);
+                    dv.push(s2v[imm8v[2]]);
+                    dv.push(s2v[imm8v[3]]);
+                    dv.push(s1v[4 + imm8v[0]]);
+                    dv.push(s1v[4 + imm8v[1]]);
+                    dv.push(s2v[4 + imm8v[2]]);
+                    dv.push(s2v[4 + imm8v[3]]);
+                }
+                VecRegName::ZMM => {todo!()}
+            }
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, dv);
+        }
+    }
+}
+
+fn vperm2f128(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 4 { return; }
+    let target = operands[0].clone();
+    let source1 = operands[1].clone();
+    let source2 = operands[2].clone();
+    let imm = operands[3].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8))
+        = (target, source1, source2, imm) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            let mut cpu = cpu.lock().unwrap();
+            let v1 = cpu.registers.get_by_sections::<u128>(src1.get_vector().0, src1.get_vector().1).unwrap();
+            let v2 = cpu.registers.get_by_sections::<u128>(src2.get_vector().0, src2.get_vector().1).unwrap();
+            let mut dv = vec![];
+            let select4 = |src1: &Vec<u128>, src2: &Vec<u128>, control: u8| -> u128 {
+                if (control >> 3) & 0b00000001 == 1 {
+                    return 0u128;
+                }
+                match control & 0b00000011 {
+                    0 => src1[0],
+                    1 => src1[1],
+                    2 => src2[0],
+                    3 => src2[1],
+                    _ => 0u128
+                }
+            };
+            dv.push(select4(&v1, &v2, imm8 as u8 & 0b00001111));
+            dv.push(select4(&v1, &v2, (imm8 as u8 >> 4) & 0b00001111));
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, dv);
+        }
+    }
+}
+
 fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<Value> {
     match reg.get_type() {
         RegType::GPR => {
@@ -382,6 +519,197 @@ fn valignd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: A
     vec![(vec![], false)]
 }
 
+fn unpack_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _cpu: Arc<Mutex<CPU>>, _vrt: HashMap<(VecRegName, usize), ValueType>, is_high: bool) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    let target = odd[0].clone();
+    let source1 = odd[1].clone();
+    let source2 = odd[2].clone();
+    if let  (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2))
+        = (target.0, source1.0, source2.0) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            match dst.get_vector().0 {
+                VecRegName::XMM => {todo!()}
+                VecRegName::YMM => {
+                    let mut v1 = vec![];
+                    let sv: Vec<usize> = if is_high {
+                        vec![2, 2, 3, 3, 6, 6, 7, 7]
+                    } else {
+                        vec![0, 0, 1, 1, 4, 4, 5, 5]
+                    };
+                    (0usize..8).for_each(|i| {
+                        if i % 2 == 0 {
+                            add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, sv[i],
+                                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                |_| {});
+                        } else {
+                            add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, sv[i],
+                                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                |_| {});
+                        }
+                    });
+                    let mut v2 = vec![];
+                    for i in 0..8 {
+                        add_animation_data!(v2;
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            dst, LayoutLocation::None, 0, i, |_| {});
+                    }
+                    return vec![(v1, false), (v2, false)];
+                }
+                VecRegName::ZMM => {todo!()}
+            }
+        }
+    }
+    vec![(vec![], false)]
+}
+
+fn vunpcklps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 3 { return vec![(vec![], false)]; }
+    unpack_animation(odd, cpu, vrt, false)
+}
+
+fn vunpckhps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 3 { return vec![(vec![], false)]; }
+    unpack_animation(odd, cpu, vrt, true)
+}
+
+fn vshufps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _cpu: Arc<Mutex<CPU>>, _vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 4 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source1 = odd[1].clone();
+    let source2 = odd[2].clone();
+    let imm = odd[3].clone();
+    if let  (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8))
+        = (target.0, source1.0, source2.0, imm.0) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            let mut imm8v = vec![];
+            [0u8, 2, 4, 6].iter().for_each(|i| {
+                let tmp = imm8 as u8 >> i;
+                imm8v.push((tmp & 0b00000011) as usize);
+            });
+            match dst.get_vector().0 {
+                VecRegName::XMM => {todo!()}
+                VecRegName::YMM => {
+                    let mut v1 = vec![];
+                    add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, imm8v[0],
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 0,
+                        |_| {});
+                    add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, imm8v[1],
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 1,
+                        |_| {});
+                    add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, imm8v[2],
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 2,
+                        |_| {});
+                    add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, imm8v[3],
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 3,
+                        |_| {});
+                    add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, imm8v[0] + 4,
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 4,
+                        |_| {});
+                    add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, imm8v[1] + 4,
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 5,
+                        |_| {});
+                    add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, imm8v[2] + 4,
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 6,
+                        |_| {});
+                    add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, imm8v[3] + 4,
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 7,
+                        |_| {});
+                    let mut v2 = vec![];
+                    for i in 0..8 {
+                        add_animation_data!(v2;
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            dst, LayoutLocation::None, 0, i, |_| {});
+                    }
+                    return vec![(v1, false), (v2, false)];
+                }
+                VecRegName::ZMM => {todo!()}
+            }
+        }
+    }
+    vec![(vec![], false)]
+}
+
+fn vperm2f128_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 4 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source1 = odd[1].clone();
+    let source2 = odd[2].clone();
+    let imm = odd[3].clone();
+    if let  (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8))
+        = (target.0, source1.0, source2.0, imm.0) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            let size1 = vrt.get(&(src1.get_vector().0, src1.get_vector().1)).unwrap().size();
+            let size2 = vrt.get(&(src2.get_vector().0, src2.get_vector().1)).unwrap().size();
+            if size1 == size2 {
+                let num = 128 / size1;
+                match dst.get_vector().0 {
+                    VecRegName::XMM => {todo!()}
+                    VecRegName::YMM => {
+                        let mut v1 = vec![];
+                        let mut dst_i = 0;
+                        [imm8 as u8 & 0b00001111, (imm8 as u8 >> 4) & 0b00001111].iter().for_each(|imm8| {
+                            match imm8 {
+                                0 => {
+                                    (0..num).for_each(|src_i| {
+                                        add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, src_i,
+                                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, dst_i,
+                                            |_| {});
+                                        dst_i += 1;
+                                    });
+                                }
+                                1 => {
+                                    (num..num * 2).for_each(|src_i| {
+                                        add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, src_i,
+                                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, dst_i,
+                                            |_| {});
+                                        dst_i += 1;
+                                    });
+                                }
+                                2 => {
+                                    (0..num).for_each(|src_i| {
+                                        add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, src_i,
+                                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, dst_i,
+                                            |_| {});
+                                        dst_i += 1;
+                                    });
+                                }
+                                3 => {
+                                    (num..num * 2).for_each(|src_i| {
+                                        add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, src_i,
+                                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, dst_i,
+                                            |_| {});
+                                        dst_i += 1;
+                                    });
+                                }
+                                _ if (imm8 >> 3) & 0b00000001 == 1 => {
+                                    (0..num).for_each(|src_i| {
+                                        add_animation_data!(v1; dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, src_i,
+                                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, dst_i,
+                                            |e| {e.set_string("0->".into())});
+                                        dst_i += 1;
+                                    });
+                                }
+                                _ => {}
+                            }
+                        });
+                        let mut v2 = vec![];
+                        for i in 0..8 {
+                            add_animation_data!(v2;
+                                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                dst, LayoutLocation::None, 0, i, |_| {});
+                        }
+                        return vec![(v1, false), (v2, false)];
+                    }
+                    VecRegName::ZMM => {todo!()}
+                }
+            }
+        }
+    }
+    vec![(vec![], false)]
+}
+
 type Func = fn(Arc<Mutex<CPU>>, Vec<Operand>, HashMap<(VecRegName, usize), ValueType>);
 type AniFunc = fn(Vec<(Operand, LayoutLocation, (usize, usize))>, Arc<Mutex<CPU>>, HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)>;
 
@@ -397,6 +725,10 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
     new_instruction!(map; "vaddps", false, vaddps, vaddps_animation);
     new_instruction!(map; "vpaddd", false, vpaddd, vpaddd_animation);
     new_instruction!(map; "valignd", false, valignd, valignd_animation);
+    new_instruction!(map; "vunpcklps", false, vunpcklps, vunpcklps_animation);
+    new_instruction!(map; "vunpckhps", false, vunpckhps, vunpckhps_animation);
+    new_instruction!(map; "vshufps", false, vshufps, vshufps_animation);
+    new_instruction!(map; "vperm2f128", false, vperm2f128, vperm2f128_animation);
     map
 }
 
