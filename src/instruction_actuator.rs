@@ -278,6 +278,11 @@ fn vmulpd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName
     mul_common::<u64>(cpu, vrt, operands[0].clone(), operands[1].clone(), operands[2].clone(), true);
 }
 
+fn add(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 3 { return; }
+    add_common::<u64>(cpu, vrt, operands[0].clone(), operands[1].clone(), operands[2].clone(), false);
+}
+
 fn valignd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
     if operands.len() != 4 { return; }
     let target = operands[0].clone();
@@ -697,6 +702,11 @@ fn vpaddd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Ar
 fn vmulpd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
     if odd.len() != 3 { return vec![(vec![], false)]; }
     mul_common_animation(cpu, vrt, odd[0].clone(), odd[1].clone(), odd[2].clone())
+}
+
+fn add_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 3 { return vec![(vec![], false)]; }
+    add_common_animation(cpu, vrt, odd[0].clone(), odd[1].clone(), odd[2].clone())
 }
 
 fn valignd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
@@ -1150,6 +1160,7 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
     new_instruction!(map; "shufpd", true, shufpd, shufpd_animation);
     new_instruction!(map; "vmulpd", false, vmulpd, vmulpd_animation);
     new_instruction!(map; "vmovapd", false, vmovapd, vmovapd_animation);
+    new_instruction!(map; "add", true, add, add_animation);
     map
 }
 
