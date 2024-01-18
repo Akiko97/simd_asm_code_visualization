@@ -599,7 +599,7 @@ fn vmovapd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegNam
     mov_common(cpu, operands, vrt);
 }
 
-fn vfmadd213pd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+fn vfmadd213pd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
     //TODO: make it to a common function
     if operands.len() != 4 { return; }
     let target = operands[0].clone();
