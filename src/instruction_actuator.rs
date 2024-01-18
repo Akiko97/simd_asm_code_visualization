@@ -599,6 +599,27 @@ fn vmovapd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegNam
     mov_common(cpu, operands, vrt);
 }
 
+fn vfmadd213pd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    //TODO: make it to a common function
+    if operands.len() != 4 { return; }
+    let target = operands[0].clone();
+    let source1 = operands[1].clone();
+    let source2 = operands[2].clone();
+    let source3 = operands[3].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Reg(src3)) =
+        (target, source1, source2, source3) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector && src3.get_type() == RegType::Vector {
+            let mut cpu = cpu.lock().unwrap();
+            let v1 = cpu.registers.get_by_sections::<u64>(src1.get_vector().0, src1.get_vector().1).unwrap();
+            let v2 = cpu.registers.get_by_sections::<u64>(src2.get_vector().0, src2.get_vector().1).unwrap();
+            let v3 = cpu.registers.get_by_sections::<u64>(src3.get_vector().0, src3.get_vector().1).unwrap();
+            let dv: Vec<u64> = v1.iter().zip(v2.iter()).map(|(x, y)| { (*x).fmul(*y) }).collect();
+            let dv: Vec<u64> = dv.iter().zip(v3.iter()).map(|(x, y)| { (*x).fadd(*y) }).collect();
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, dv);
+        }
+    }
+}
+
 fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<Value> {
     match reg.get_type() {
         RegType::GPR => {
@@ -1044,7 +1065,7 @@ fn mov_common_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu
     match target.0 {
         Operand::Reg(dst) => {
             match source.0 {
-                Operand::Reg(src) => {
+                Operand::Reg(_src) => {
                     // reg -> reg
                     // TODO
                 }
@@ -1098,13 +1119,13 @@ fn mov_common_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu
                         return vec![(v1, false), (v2, false)];
                     }
                 }
-                Operand::Imm(src) => {
+                Operand::Imm(_src) => {
                     // imm -> reg(gpr)
                     // TODO
                 }
             }
         }
-        Operand::Mem(dst) => {
+        Operand::Mem(_dst) => {
             // reg -> mem
             // if let Operand::Reg(src) = source.0 {
             //     if src.get_type() == RegType::GPR {
@@ -1137,6 +1158,55 @@ fn vmovapd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: A
     mov_common_animation(odd, cpu, vrt)
 }
 
+fn vfmadd213pd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    //TODO: make it to a common function
+    if odd.len() != 4 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source1 = odd[1].clone();
+    let source2 = odd[2].clone();
+    let source3 = odd[3].clone();
+    if let  (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Reg(src3))
+        = (target.0, source1.0, source2.0, source3.0) {
+        let vs1 = get_values_from_register(src1, cpu.clone(), vrt.clone());
+        let vs2 = get_values_from_register(src2, cpu.clone(), vrt.clone());
+        let vs3 = get_values_from_register(src3, cpu.clone(), vrt.clone());
+        let num = vs1.len();
+        let mut v1 = vec![];
+        (0..num).for_each(|i| {
+            add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, i,
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                |_| {});
+        });
+        let mut v2 = vec![];
+        (0..num).for_each(|i| {
+            let vs1c = vs1.clone();
+            let vs2c = vs2.clone();
+            let ic = i.clone();
+            add_animation_data!(v2; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, i,
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                move |e| {e.set_string(format!("({} * {})", vs1c[ic], vs2c[ic]))});
+        });
+        let mut v3 = vec![];
+        (0..num).for_each(|i| {
+            let vs1c = vs1.clone();
+            let vs2c = vs2.clone();
+            let vs3c = vs3.clone();
+            let ic = i.clone();
+            add_animation_data!(v3; src3, source3.1, if source3.1 == LayoutLocation::TOP {source3.2.0} else {source3.2.1}, i,
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                move |e| {e.set_string(format!("({} * {}) + {}", vs1c[ic], vs2c[ic], vs3c[ic]))});
+        });
+        let mut v4 = vec![];
+        for i in 0..num {
+            add_animation_data!(v4;
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                dst, LayoutLocation::None, 0, i, |_| {});
+        }
+        return vec![(v1, false), (v2, false), (v3, false), (v4, false)];
+    }
+    vec![(vec![], false)]
+}
+
 type Func = fn(Arc<Mutex<CPU>>, Vec<Operand>, HashMap<(VecRegName, usize), ValueType>);
 type AniFunc = fn(Vec<(Operand, LayoutLocation, (usize, usize))>, Arc<Mutex<CPU>>, HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)>;
 
@@ -1161,6 +1231,7 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
     new_instruction!(map; "vmulpd", false, vmulpd, vmulpd_animation);
     new_instruction!(map; "vmovapd", false, vmovapd, vmovapd_animation);
     new_instruction!(map; "add", true, add, add_animation);
+    new_instruction!(map; "vfmadd213pd", true, vfmadd213pd, vfmadd213pd_animation);
     map
 }
 
