@@ -897,10 +897,11 @@ impl RegVisualizer {
             // can not change the value, so change the string
             // e.set_value(value);
             if let Some(s) = string {
-                e.set_string(s);
+                e.set_string(format!("{}", s));
             } else {
                 e.set_string(value.to_string());
             }
+            e.display = true; // ?WTF???????
             e.set_order(order.get_lower());
             e.set_color(color);
             e.set_border_color(border_color);

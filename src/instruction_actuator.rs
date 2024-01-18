@@ -489,6 +489,111 @@ fn shufpd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegNam
     }
 }
 
+fn mov_common(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 2 { return; }
+    let target = operands[0].clone();
+    let source = operands[1].clone();
+    match target {
+        Operand::Reg(dst) => {
+            match source {
+                Operand::Reg(src) => {
+                    // reg -> reg
+                    if dst.get_type() == src.get_type() {
+                        if dst.get_type() == RegType::GPR {
+                            // gpr -> gpr
+                            let mut cpu = cpu.lock().unwrap();
+                            let v = cpu.registers.get_gpr_value(src.get_gpr());
+                            cpu.registers.set_gpr_value(dst.get_gpr(), v);
+                        } else if dst.get_type() == RegType::Vector && dst.get_vector().0 == src.get_vector().0 {
+                            // vector -> vector
+                            let mut cpu = cpu.lock().unwrap();
+                            match dst.get_vector().0 {
+                                VecRegName::XMM => {
+                                    let v = cpu.registers.get_by_sections::<u128>(src.get_vector().0, src.get_vector().1).unwrap();
+                                    cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, v);
+                                }
+                                VecRegName::YMM => {
+                                    let v = cpu.registers.get_by_sections::<u256>(src.get_vector().0, src.get_vector().1).unwrap();
+                                    cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, v);
+                                }
+                                VecRegName::ZMM => {
+                                    let v = cpu.registers.get_by_sections::<u512>(src.get_vector().0, src.get_vector().1).unwrap();
+                                    cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, v);
+                                }
+                            }
+                        }
+                    }
+                }
+                Operand::Mem(src) => {
+                    // mem -> reg
+                    let mut cpu = cpu.lock().unwrap();
+                    if dst.get_type() == RegType::GPR {
+                        // mem -> gpr
+                        let v = cpu.memory.read::<u64>(src as usize);
+                        cpu.registers.set_gpr_value(dst.get_gpr(), v);
+                    } else if dst.get_type() == RegType::Vector {
+                        // mem -> vector
+                        match dst.get_vector().0 {
+                            VecRegName::XMM => {
+                                let v = cpu.memory.read::<u128>(src as usize);
+                                cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, vec![v]);
+                            }
+                            VecRegName::YMM => {
+                                let v = cpu.memory.read::<u256>(src as usize);
+                                cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, vec![v]);
+                            }
+                            VecRegName::ZMM => {
+                                let v = cpu.memory.read::<u512>(src as usize);
+                                cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, vec![v]);
+                            }
+                        }
+                    }
+                }
+                Operand::Imm(src) => {
+                    // imm -> reg(gpr)
+                    if dst.get_type() == RegType::GPR {
+                        let mut cpu = cpu.lock().unwrap();
+                        cpu.registers.set_gpr_value(dst.get_gpr(), src);
+                    }
+                }
+            }
+        }
+        Operand::Mem(dst) => {
+            if let Operand::Reg(src) = source {
+                // reg -> mem
+                if src.get_type() == RegType::GPR {
+                    // gpr -> mem
+                    let mut cpu = cpu.lock().unwrap();
+                    let v = cpu.registers.get_gpr_value(src.get_gpr());
+                    cpu.memory.write::<u64>(dst as usize, v);
+                } else if src.get_type() == RegType::Vector {
+                    // vector -> mem
+                    let mut cpu = cpu.lock().unwrap();
+                    match src.get_vector().0 {
+                        VecRegName::XMM => {
+                            let v = cpu.registers.get_by_sections::<u128>(src.get_vector().0, src.get_vector().1).unwrap();
+                            cpu.memory.write::<u128>(dst as usize, v[0]);
+                        }
+                        VecRegName::YMM => {
+                            let v = cpu.registers.get_by_sections::<u256>(src.get_vector().0, src.get_vector().1).unwrap();
+                            cpu.memory.write::<u256>(dst as usize, v[0]);
+                        }
+                        VecRegName::ZMM => {
+                            let v = cpu.registers.get_by_sections::<u512>(src.get_vector().0, src.get_vector().1).unwrap();
+                            cpu.memory.write::<u512>(dst as usize, v[0]);
+                        }
+                    }
+                }
+            }
+        }
+        _ => {/*ERROR*/}
+    }
+}
+
+fn vmovapd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    mov_common(cpu, operands, vrt);
+}
+
 fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<Value> {
     match reg.get_type() {
         RegType::GPR => {
@@ -922,6 +1027,106 @@ fn shufpd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _cpu: A
     vec![(vec![], false)]
 }
 
+fn mov_common_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 2 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source = odd[1].clone();
+    match target.0 {
+        Operand::Reg(dst) => {
+            match source.0 {
+                Operand::Reg(src) => {
+                    // reg -> reg
+                    // TODO
+                }
+                Operand::Mem(src) => {
+                    // mem -> reg
+                    let cpu = cpu.lock().unwrap();
+                    if dst.get_type() == RegType::GPR {
+                        // mem -> gpr TODO
+                        let v = cpu.memory.read::<u64>(src as usize);
+                        let mut v1 = vec![];
+                        add_animation_data!(v1; dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 0,
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 0,
+                            move |e| {e.set_string(format!("{}->", v))});
+                        let mut v2 = vec![];
+                        add_animation_data!(v2;
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 0,
+                            dst, LayoutLocation::None, 0, 0, |_| {});
+                        return vec![(v1, false), (v2, false)];
+                    } else if dst.get_type() == RegType::Vector {
+                        // mem -> vector
+                        let size = vrt.get(&dst.get_vector()).unwrap();
+                        let num = match dst.get_vector().0 {
+                            VecRegName::XMM => 128 / size.size(),
+                            VecRegName::YMM => 256 / size.size(),
+                            VecRegName::ZMM => 512 / size.size(),
+                        };
+                        let values = match size {
+                            ValueType::U8 => create_values(cpu.memory.read_vec::<u8>(src as usize, num)),
+                            ValueType::U16 => create_values(cpu.memory.read_vec::<u16>(src as usize, num)),
+                            ValueType::U32 => create_values(cpu.memory.read_vec::<u32>(src as usize, num)),
+                            ValueType::U64 => create_values(cpu.memory.read_vec::<u64>(src as usize, num)),
+                            ValueType::U128 => create_values(cpu.memory.read_vec::<u128>(src as usize, num)),
+                            ValueType::U256 => create_values(cpu.memory.read_vec::<u256>(src as usize, num)),
+                            ValueType::U512 => create_values(cpu.memory.read_vec::<u512>(src as usize, num)),
+                            ValueType::F32 => create_values(Utilities::u32vec_to_f32vec(cpu.memory.read_vec::<u32>(src as usize, num))),
+                            ValueType::F64 => create_values(Utilities::u64vec_to_f64vec(cpu.memory.read_vec::<u64>(src as usize, num))),
+                        };
+                        let mut v1 = vec![];
+                        values.iter().enumerate().for_each(|(i, v)| {
+                            let v = v.clone();
+                            add_animation_data!(v1; dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                move |e| {e.set_string(format!("{}->", v))});
+                        });
+                        let mut v2 = vec![];
+                        (0..values.len()).for_each(|i| {
+                            add_animation_data!(v2;
+                                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                dst, LayoutLocation::None, 0, i, |_| {});
+                        });
+                        return vec![(v1, false), (v2, false)];
+                    }
+                }
+                Operand::Imm(src) => {
+                    // imm -> reg(gpr)
+                    // TODO
+                }
+            }
+        }
+        Operand::Mem(dst) => {
+            // reg -> mem
+            // if let Operand::Reg(src) = source.0 {
+            //     if src.get_type() == RegType::GPR {
+            //         // gpr -> mem
+            //         // TODO
+            //     } else if src.get_type() == RegType::Vector {
+            //         // vector -> mem
+            //         let values = get_values_from_register(src, cpu.clone(), vrt.clone());
+            //         let mut v1 = vec![];
+            //         (0..values.len()).for_each(|i| {
+            //             add_animation_data!(v1; src, source.1, if source.1 == LayoutLocation::TOP {source.2.0} else {source.2.1}, i,
+            //                 src, source.1, if source.1 == LayoutLocation::TOP {source.2.0} else {source.2.1}, i,
+            //                 |e| {e.set_string(format!("<-{}", e.get_value()))});
+            //         });
+            //         let mut v2 = vec![];
+            //         (0..values.len()).for_each(|i| {
+            //             add_animation_data!(v1; src, source.1, if source.1 == LayoutLocation::TOP {source.2.0} else {source.2.1}, i,
+            //                 src, LayoutLocation::None, 0, i, |_| {});
+            //         });
+            //         return vec![(v1, false), (v2, false)];
+            //     }
+            // }
+        }
+        _ => {/*ERROR*/}
+    }
+    vec![(vec![], false)]
+}
+
+fn vmovapd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    mov_common_animation(odd, cpu, vrt)
+}
+
 type Func = fn(Arc<Mutex<CPU>>, Vec<Operand>, HashMap<(VecRegName, usize), ValueType>);
 type AniFunc = fn(Vec<(Operand, LayoutLocation, (usize, usize))>, Arc<Mutex<CPU>>, HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)>;
 
@@ -944,6 +1149,7 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
     new_instruction!(map; "vextractf128", false, vextractf128, vextractf128_animation);
     new_instruction!(map; "shufpd", true, shufpd, shufpd_animation);
     new_instruction!(map; "vmulpd", false, vmulpd, vmulpd_animation);
+    new_instruction!(map; "vmovapd", false, vmovapd, vmovapd_animation);
     map
 }
 
