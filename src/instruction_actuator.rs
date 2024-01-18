@@ -438,6 +438,35 @@ fn vextractf128(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(Vec
     }
 }
 
+fn shufpd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 4 { return; }
+    let target = operands[0].clone();
+    let source1 = operands[1].clone();
+    let source2 = operands[2].clone();
+    let imm = operands[3].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8)) =
+        (target, source1, source2, imm) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == VecRegName::XMM && dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            let mut cpu = cpu.lock().unwrap();
+            let v1 = cpu.registers.get_by_sections::<u64>(src1.get_vector().0, src1.get_vector().1).unwrap();
+            let v2 = cpu.registers.get_by_sections::<u64>(src2.get_vector().0, src2.get_vector().1).unwrap();
+            let mut dv = vec![];
+            if imm8 as u8 & 0b00000001 == 0 {
+                dv.push(v1[0]);
+            } else {
+                dv.push(v1[1]);
+            }
+            if (imm8 as u8 >> 1) & 0b00000001 == 0 {
+                dv.push(v2[0]);
+            } else {
+                dv.push(v2[1]);
+            }
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, dv);
+        }
+    }
+}
+
 fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<Value> {
     match reg.get_type() {
         RegType::GPR => {
@@ -772,11 +801,12 @@ fn vextractf128_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _
     let imm = odd[2].clone();
     if let  (Operand::Reg(dst), Operand::Reg(src), Operand::Imm(imm8))
         = (target.0, source.0, imm.0) {
-        if dst.get_vector().0 == VecRegName::XMM && src.get_vector().0 == VecRegName::YMM {
+        if dst.get_type() == RegType::Vector && src.get_type() == RegType::Vector &&
+            dst.get_vector().0 == VecRegName::XMM && src.get_vector().0 == VecRegName::YMM {
             if vrt.get(&dst.get_vector()).unwrap() == vrt.get(&src.get_vector()).unwrap() {
                 let t_size = vrt.get(&dst.get_vector()).unwrap().size();
                 let xmm_num = 128 / t_size;
-                let ymm_num = 256 / t_size;
+                let _ymm_num = 256 / t_size;
                 let mut v1 = vec![];
                 if imm8 as u8 & 0b00000001 == 1 {
                     (0..xmm_num).for_each(|i| {
@@ -793,6 +823,60 @@ fn vextractf128_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _
                 }
                 let mut v2 = vec![];
                 for i in 0..xmm_num {
+                    add_animation_data!(v2;
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                        dst, LayoutLocation::None, 0, i, |_| {});
+                }
+                return vec![(v1, false), (v2, false)];
+            }
+        }
+    }
+    vec![(vec![], false)]
+}
+
+fn shufpd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 4 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source1 = odd[1].clone();
+    let source2 = odd[2].clone();
+    let imm = odd[3].clone();
+    if let  (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Imm(imm8))
+        = (target.0, source1.0, source2.0, imm.0) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && src2.get_type() == RegType::Vector &&
+            dst.get_vector().0 == VecRegName::XMM && dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+            if vrt.get(&dst.get_vector()).unwrap() == vrt.get(&src1.get_vector()).unwrap() &&
+                vrt.get(&dst.get_vector()).unwrap() == vrt.get(&src2.get_vector()).unwrap() {
+                let size = vrt.get(&dst.get_vector()).unwrap().size();
+                let num = 128 / size;
+                let mut v1 = vec![];
+                if imm8 as u8 & 0b00000001 == 0 {
+                    (0..num / 2).for_each(|i| {
+                        add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, i,
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            |_| {});
+                    });
+                } else {
+                    (0..num / 2).for_each(|i| {
+                        add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, i + num / 2,
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            |_| {});
+                    });
+                }
+                if (imm8 as u8 >> 1) & 0b00000001 == 0 {
+                    (num / 2..num).for_each(|i| {
+                        add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, i - num / 2,
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            |_| {});
+                    });
+                } else {
+                    (num / 2..num).for_each(|i| {
+                        add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, i,
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            |_| {});
+                    });
+                }
+                let mut v2 = vec![];
+                for i in 0..num {
                     add_animation_data!(v2;
                         dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
                         dst, LayoutLocation::None, 0, i, |_| {});
@@ -824,6 +908,7 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
     new_instruction!(map; "vshufps", false, vshufps, vshufps_animation);
     new_instruction!(map; "vperm2f128", false, vperm2f128, vperm2f128_animation);
     new_instruction!(map; "vextractf128", false, vextractf128, vextractf128_animation);
+    new_instruction!(map; "shufpd", true, shufpd, shufpd_animation);
     map
 }
 
