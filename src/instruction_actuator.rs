@@ -416,6 +416,28 @@ fn vperm2f128(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRe
     }
 }
 
+fn vextractf128(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 3 { return; }
+    let target = operands[0].clone();
+    let source = operands[1].clone();
+    let imm = operands[2].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src), Operand::Imm(imm8)) =
+        (target, source, imm) {
+        if dst.get_type() == RegType::Vector && dst.get_vector().0 == VecRegName::XMM &&
+            src.get_type() == RegType::Vector && src.get_vector().0 == VecRegName::YMM {
+            let mut cpu = cpu.lock().unwrap();
+            let sv = cpu.registers.get_by_sections::<u128>(src.get_vector().0, src.get_vector().1).unwrap();
+            let mut dv = vec![];
+            if imm8 as u8 & 0b00000001 == 1 {
+                dv.push(sv[1]);
+            } else {
+                dv.push(sv[0]);
+            }
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, dv);
+        }
+    }
+}
+
 fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<Value> {
     match reg.get_type() {
         RegType::GPR => {
@@ -743,6 +765,45 @@ fn vperm2f128_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _cp
     vec![(vec![], false)]
 }
 
+fn vextractf128_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, _cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 3 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source = odd[1].clone();
+    let imm = odd[2].clone();
+    if let  (Operand::Reg(dst), Operand::Reg(src), Operand::Imm(imm8))
+        = (target.0, source.0, imm.0) {
+        if dst.get_vector().0 == VecRegName::XMM && src.get_vector().0 == VecRegName::YMM {
+            if vrt.get(&dst.get_vector()).unwrap() == vrt.get(&src.get_vector()).unwrap() {
+                let t_size = vrt.get(&dst.get_vector()).unwrap().size();
+                let xmm_num = 128 / t_size;
+                let ymm_num = 256 / t_size;
+                let mut v1 = vec![];
+                if imm8 as u8 & 0b00000001 == 1 {
+                    (0..xmm_num).for_each(|i| {
+                        add_animation_data!(v1; src, source.1, if source.1 == LayoutLocation::TOP {source.2.0} else {source.2.1}, i + xmm_num,
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            |_| {});
+                    });
+                } else {
+                    (0..xmm_num).for_each(|i| {
+                        add_animation_data!(v1; src, source.1, if source.1 == LayoutLocation::TOP {source.2.0} else {source.2.1}, i,
+                            dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                            |_| {});
+                    });
+                }
+                let mut v2 = vec![];
+                for i in 0..xmm_num {
+                    add_animation_data!(v2;
+                        dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                        dst, LayoutLocation::None, 0, i, |_| {});
+                }
+                return vec![(v1, false), (v2, false)];
+            }
+        }
+    }
+    vec![(vec![], false)]
+}
+
 type Func = fn(Arc<Mutex<CPU>>, Vec<Operand>, HashMap<(VecRegName, usize), ValueType>);
 type AniFunc = fn(Vec<(Operand, LayoutLocation, (usize, usize))>, Arc<Mutex<CPU>>, HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)>;
 
@@ -762,6 +823,7 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
     new_instruction!(map; "vunpckhps", false, vunpckhps, vunpckhps_animation);
     new_instruction!(map; "vshufps", false, vshufps, vshufps_animation);
     new_instruction!(map; "vperm2f128", false, vperm2f128, vperm2f128_animation);
+    new_instruction!(map; "vextractf128", false, vextractf128, vextractf128_animation);
     map
 }
 
