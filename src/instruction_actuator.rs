@@ -620,6 +620,22 @@ fn vfmadd213pd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecR
     }
 }
 
+fn vbroadcastsd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
+    //TODO: make it to a common function
+    if operands.len() != 6 { return; }
+    let target = operands[0].clone();
+    let source = operands[1].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src)) =
+        (target, source) {
+        if dst.get_type() == RegType::Vector && src.get_type() == RegType::Vector && dst.get_vector().0 == VecRegName::YMM && src.get_vector().0 == VecRegName::XMM {
+            let mut cpu = cpu.lock().unwrap();
+            let v = cpu.registers.get_by_sections::<u64>(src.get_vector().0, src.get_vector().1).unwrap();
+            let v = v[0];
+            cpu.registers.set_by_sections(dst.get_vector().0, dst.get_vector().1, vec![v; 4]);
+        }
+    }
+}
+
 fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<Value> {
     match reg.get_type() {
         RegType::GPR => {
@@ -1207,36 +1223,73 @@ fn vfmadd213pd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cp
     vec![(vec![], false)]
 }
 
+fn vbroadcastsd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    //TODO: make it to a common function
+    if odd.len() != 6 { return vec![(vec![], false)]; }
+    let target = odd[0].clone();
+    let source1 = odd[1].clone();
+    let source2 = odd[2].clone();
+    let source3 = odd[3].clone();
+    let source4 = odd[4].clone();
+    if let (Operand::Reg(dst), Operand::Reg(src1), Operand::Reg(src2), Operand::Reg(src3), Operand::Reg(src4)) =
+        (target.0, source1.0, source2.0, source3.0, source4.0) {
+        if dst.get_type() == RegType::Vector && src1.get_type() == RegType::Vector && dst.get_vector().0 == VecRegName::YMM && src1.get_vector().0 == VecRegName::XMM {
+            let mut v1 = vec![];
+            add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, 0,
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 0,
+                |_| {});
+            add_animation_data!(v1; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, 0,
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 1,
+                |_| {});
+            add_animation_data!(v1; src3, source3.1, if source3.1 == LayoutLocation::TOP {source3.2.0} else {source3.2.1}, 0,
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 2,
+                |_| {});
+            add_animation_data!(v1; src4, source4.1, if source4.1 == LayoutLocation::TOP {source4.2.0} else {source4.2.1}, 0,
+                dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, 3,
+                |_| {});
+            let mut v2 = vec![];
+            for i in 0..4 {
+                add_animation_data!(v2;
+                    dst, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                    dst, LayoutLocation::None, 0, i, |_| {});
+            }
+            return vec![(v1, false), (v2, false)];
+        }
+    }
+    vec![(vec![], false)]
+}
+
 type Func = fn(Arc<Mutex<CPU>>, Vec<Operand>, HashMap<(VecRegName, usize), ValueType>);
 type AniFunc = fn(Vec<(Operand, LayoutLocation, (usize, usize))>, Arc<Mutex<CPU>>, HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)>;
 
 macro_rules! new_instruction {
-    ($map:expr; $inst:expr, $target_read:expr, $func:expr, $ani_func:expr) => {
-        $map.insert(String::from($inst), ($target_read, $func as Func, $ani_func as AniFunc))
+    ($map:expr; $inst:expr, $target_read:expr, $duplicate_last:expr, $func:expr, $ani_func:expr) => {
+        $map.insert(String::from($inst), ($target_read, $duplicate_last, $func as Func, $ani_func as AniFunc))
     };
 }
 
-fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
+fn create_instruction_list() -> HashMap<String, (bool, usize, Func, AniFunc)>
 {
     let mut map = HashMap::new();
-    new_instruction!(map; "vaddps", false, vaddps, vaddps_animation);
-    new_instruction!(map; "vpaddd", false, vpaddd, vpaddd_animation);
-    new_instruction!(map; "valignd", false, valignd, valignd_animation);
-    new_instruction!(map; "vunpcklps", false, vunpcklps, vunpcklps_animation);
-    new_instruction!(map; "vunpckhps", false, vunpckhps, vunpckhps_animation);
-    new_instruction!(map; "vshufps", false, vshufps, vshufps_animation);
-    new_instruction!(map; "vperm2f128", false, vperm2f128, vperm2f128_animation);
-    new_instruction!(map; "vextractf128", false, vextractf128, vextractf128_animation);
-    new_instruction!(map; "shufpd", true, shufpd, shufpd_animation);
-    new_instruction!(map; "vmulpd", false, vmulpd, vmulpd_animation);
-    new_instruction!(map; "vmovapd", false, vmovapd, vmovapd_animation);
-    new_instruction!(map; "add", true, add, add_animation);
-    new_instruction!(map; "vfmadd213pd", true, vfmadd213pd, vfmadd213pd_animation);
+    new_instruction!(map; "vaddps", false, 0, vaddps, vaddps_animation);
+    new_instruction!(map; "vpaddd", false, 0, vpaddd, vpaddd_animation);
+    new_instruction!(map; "valignd", false, 0, valignd, valignd_animation);
+    new_instruction!(map; "vunpcklps", false, 0, vunpcklps, vunpcklps_animation);
+    new_instruction!(map; "vunpckhps", false, 0, vunpckhps, vunpckhps_animation);
+    new_instruction!(map; "vshufps", false, 0, vshufps, vshufps_animation);
+    new_instruction!(map; "vperm2f128", false, 0, vperm2f128, vperm2f128_animation);
+    new_instruction!(map; "vextractf128", false, 0, vextractf128, vextractf128_animation);
+    new_instruction!(map; "shufpd", true, 0, shufpd, shufpd_animation);
+    new_instruction!(map; "vmulpd", false, 0, vmulpd, vmulpd_animation);
+    new_instruction!(map; "vmovapd", false, 0, vmovapd, vmovapd_animation);
+    new_instruction!(map; "add", true, 0, add, add_animation);
+    new_instruction!(map; "vfmadd213pd", true, 0, vfmadd213pd, vfmadd213pd_animation);
+    new_instruction!(map; "vbroadcastsd", false, 4, vbroadcastsd, vbroadcastsd_animation);
     map
 }
 
 lazy_static! {
-    static ref OPCODES: HashMap<String, (bool, Func, AniFunc)> = {
+    static ref OPCODES: HashMap<String, (bool, usize, Func, AniFunc)> = {
         create_instruction_list()
     };
 }
@@ -1282,11 +1335,17 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
         println!("Unsupport opcode: {}", opcode);
         return;
     }
-    let (is_target_read, func, ani_func) = OPCODES.get(&opcode).unwrap();
+    let (is_target_read, duplicate_last, func, ani_func) = OPCODES.get(&opcode).unwrap();
     if *is_target_read {
         if let Some(target) = operands.first() {
             operands.insert(0, target.clone());
         }
+    }
+    if *duplicate_last != 0 {
+        (0..*duplicate_last).for_each(|_| {
+            let tmp = operands[operands.len() - 1].clone();
+            operands.push(tmp);
+        });
     }
     // TODO
     // Animation FSM
