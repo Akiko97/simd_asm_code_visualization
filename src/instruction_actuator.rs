@@ -1,7 +1,7 @@
 use std::collections::{HashMap};
 use lazy_static::lazy_static;
 use std::convert::Into;
-use std::ops::Add;
+use std::ops::{Add, Mul};
 use std::sync::{Arc, Mutex};
 use cpulib::{CPU, VecRegName, GPRName, SectionCompatible, u256, u512, FLAGSName};
 use cpulib::Utilities;
@@ -176,15 +176,22 @@ fn create_operands(operands: Vec<String>, cpu: Arc<Mutex<CPU>>) -> Vec<Operand> 
 
 trait FloatCalc {
     fn fadd(self, other: Self) -> Self;
+    fn fmul(self, other: Self) -> Self;
 }
 impl FloatCalc for u32 {
     fn fadd(self, other: Self) -> Self {
         Utilities::f32_to_u32(Utilities::u32_to_f32(self) + Utilities::u32_to_f32(other))
     }
+    fn fmul(self, other: Self) -> Self {
+        Utilities::f32_to_u32(Utilities::u32_to_f32(self) * Utilities::u32_to_f32(other))
+    }
 }
 impl FloatCalc for u64 {
     fn fadd(self, other: Self) -> Self {
         Utilities::f64_to_u64(Utilities::u64_to_f64(self) + Utilities::u64_to_f64(other))
+    }
+    fn fmul(self, other: Self) -> Self {
+        Utilities::f64_to_u64(Utilities::u64_to_f64(self) * Utilities::u64_to_f64(other))
     }
 }
 macro_rules! fake_float_calc {
@@ -192,6 +199,9 @@ macro_rules! fake_float_calc {
         impl FloatCalc for $ty {
             fn fadd(self, other: Self) -> Self {
                 self + other
+            }
+            fn fmul(self, other: Self) -> Self {
+                self * other
             }
         }
     };
@@ -202,49 +212,56 @@ fake_float_calc!(u128);
 fake_float_calc!(u256);
 fake_float_calc!(u512);
 
-fn add_common<T>(cpu: Arc<Mutex<CPU>>, _vrt: HashMap<(VecRegName, usize), ValueType>, target: Operand, source1: Operand, source2: Operand, is_float: bool)
-    where Vec<T>: FromIterator<<T as Add>::Output>, T: SectionCompatible + Add + FloatCalc
-{
-    match target {
-        Operand::Reg(dst) => {
-            if let (Operand::Reg(src1), Operand::Reg(src2)) = (source1.clone(), source2.clone()) {
-                if !(dst.get_type() == src1.get_type() && dst.get_type() == src2.get_type()) { return; }
-                if dst.get_type() == RegType::GPR {
-                    let mut cpu = cpu.lock().unwrap();
-                    let result = if is_float {
-                        cpu.registers.get_gpr_value(src1.get_gpr()).fadd(cpu.registers.get_gpr_value(src2.get_gpr()))
-                    } else {
-                        cpu.registers.get_gpr_value(src1.get_gpr()).add(cpu.registers.get_gpr_value(src2.get_gpr()))
-                    };
-                    cpu.registers.set_gpr_value(dst.get_gpr(), result);
-                } else if dst.get_type() == RegType::Vector && dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
-                    let mut cpu = cpu.lock().unwrap();
-                    let mut a: Vec<T> = cpu.registers.get_by_sections::<T>(src1.get_vector().0, src1.get_vector().1).unwrap();
-                    let mut b: Vec<T> = cpu.registers.get_by_sections::<T>(src2.get_vector().0, src2.get_vector().1).unwrap();
-                    let result = if is_float {
-                        a.iter().zip(b.iter()).map(|(x, y)| { (*x).fadd(*y) }).collect()
-                    } else {
-                        a.iter().zip(b.iter()).map(|(x, y)| { (*x).add(*y) }).collect()
-                    };
-                    cpu.registers.set_by_sections::<T>(dst.get_vector().0, dst.get_vector().1, result);
+macro_rules! create_calc_common {
+    ($func_name:ident, $calc:ident, $fcalc:ident) => {
+        fn $func_name<T>(cpu: Arc<Mutex<CPU>>, _vrt: HashMap<(VecRegName, usize), ValueType>, target: Operand, source1: Operand, source2: Operand, is_float: bool)
+            where Vec<T>: FromIterator<<T as Add>::Output>, Vec<T>: FromIterator<<T as Mul>::Output>, T: SectionCompatible + Add + FloatCalc + Mul
+        {
+            match target {
+                Operand::Reg(dst) => {
+                    if let (Operand::Reg(src1), Operand::Reg(src2)) = (source1.clone(), source2.clone()) {
+                        if !(dst.get_type() == src1.get_type() && dst.get_type() == src2.get_type()) { return; }
+                        if dst.get_type() == RegType::GPR {
+                            let mut cpu = cpu.lock().unwrap();
+                            let result = if is_float {
+                                cpu.registers.get_gpr_value(src1.get_gpr()).$fcalc(cpu.registers.get_gpr_value(src2.get_gpr()))
+                            } else {
+                                cpu.registers.get_gpr_value(src1.get_gpr()).$calc(cpu.registers.get_gpr_value(src2.get_gpr()))
+                            };
+                            cpu.registers.set_gpr_value(dst.get_gpr(), result);
+                        } else if dst.get_type() == RegType::Vector && dst.get_vector().0 == src1.get_vector().0 && dst.get_vector().0 == src2.get_vector().0 {
+                            let mut cpu = cpu.lock().unwrap();
+                            let mut a: Vec<T> = cpu.registers.get_by_sections::<T>(src1.get_vector().0, src1.get_vector().1).unwrap();
+                            let mut b: Vec<T> = cpu.registers.get_by_sections::<T>(src2.get_vector().0, src2.get_vector().1).unwrap();
+                            let result = if is_float {
+                                a.iter().zip(b.iter()).map(|(x, y)| { (*x).$fcalc(*y) }).collect()
+                            } else {
+                                a.iter().zip(b.iter()).map(|(x, y)| { (*x).$calc(*y) }).collect()
+                            };
+                            cpu.registers.set_by_sections::<T>(dst.get_vector().0, dst.get_vector().1, result);
+                        }
+                    } else if let (Operand::Reg(src1), Operand::Imm(src2)) = (source1.clone(), source2.clone()) {
+                        if dst.get_type() == src1.get_type() && dst.get_type() == RegType::GPR {
+                            let mut cpu = cpu.lock().unwrap();
+                            let result = if is_float {
+                                cpu.registers.get_gpr_value(src1.get_gpr()).$fcalc(src2)
+                            } else {
+                                cpu.registers.get_gpr_value(src1.get_gpr()).$calc(src2)
+                            };
+                            cpu.registers.set_gpr_value(dst.get_gpr(), result);
+                        }
+                    } else if let (Operand::Reg(_src1), Operand::Mem(_src2)) = (source1.clone(), source2.clone()) {
+                        todo!()
+                    }
                 }
-            } else if let (Operand::Reg(src1), Operand::Imm(src2)) = (source1.clone(), source2.clone()) {
-                if dst.get_type() == src1.get_type() && dst.get_type() == RegType::GPR {
-                    let mut cpu = cpu.lock().unwrap();
-                    let result = if is_float {
-                        cpu.registers.get_gpr_value(src1.get_gpr()).fadd(src2)
-                    } else {
-                        cpu.registers.get_gpr_value(src1.get_gpr()).add(src2)
-                    };
-                    cpu.registers.set_gpr_value(dst.get_gpr(), result);
-                }
-            } else if let (Operand::Reg(_src1), Operand::Mem(_src2)) = (source1.clone(), source2.clone()) {
-                todo!()
+                _ => panic!("Invalid Instruction"),
             }
         }
-        _ => panic!("Invalid Instruction"),
-    }
+    };
 }
+
+create_calc_common!(add_common, add, fadd);
+create_calc_common!(mul_common, mul, fmul);
 
 fn vaddps(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
     if operands.len() != 3 { return; }
@@ -254,6 +271,11 @@ fn vaddps(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName
 fn vpaddd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
     if operands.len() != 3 { return; }
     add_common::<u32>(cpu, vrt, operands[0].clone(), operands[1].clone(), operands[2].clone(), false);
+}
+
+fn vmulpd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, vrt: HashMap<(VecRegName, usize), ValueType>) {
+    if operands.len() != 3 { return; }
+    mul_common::<u64>(cpu, vrt, operands[0].clone(), operands[1].clone(), operands[2].clone(), true);
 }
 
 fn valignd(cpu: Arc<Mutex<CPU>>, operands: Vec<Operand>, _vrt: HashMap<(VecRegName, usize), ValueType>) {
@@ -491,64 +513,71 @@ fn get_values_from_register(reg: Register, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(V
     }
 }
 
-fn add_common_animation(cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>,
-                        target: (Operand, LayoutLocation, (usize, usize)),
-                        source1: (Operand, LayoutLocation, (usize, usize)),
-                        source2: (Operand, LayoutLocation, (usize, usize))) -> Vec<(Vec<ElementAnimationData>, bool)>
-{
-    return match target.0 {
-        Operand::Reg(tgt) => {
-            if let (Operand::Reg(src1), Operand::Reg(src2)) = (source1.0.clone(), source2.0.clone()) {
-                if src1.get_type() == src2.get_type() {
-                    let s1v = get_values_from_register(src1, cpu.clone(), vrt.clone());
-                    let s2v = get_values_from_register(src2, cpu.clone(), vrt.clone());
-                    let s1l = s1v.len();
-                    let s2l = s2v.len();
-                    let _l = s1l + s2l;
-                    let mut v1 = vec![];
-                    for i in 0..s1l {
-                        add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, i,
-                            tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
-                            |_| {});
+macro_rules! create_calc_common_animation {
+    ($func_name:ident, $calc:literal) => {
+        fn $func_name(cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>,
+                                target: (Operand, LayoutLocation, (usize, usize)),
+                                source1: (Operand, LayoutLocation, (usize, usize)),
+                                source2: (Operand, LayoutLocation, (usize, usize))) -> Vec<(Vec<ElementAnimationData>, bool)>
+        {
+            return match target.0 {
+                Operand::Reg(tgt) => {
+                    if let (Operand::Reg(src1), Operand::Reg(src2)) = (source1.0.clone(), source2.0.clone()) {
+                        if src1.get_type() == src2.get_type() {
+                            let s1v = get_values_from_register(src1, cpu.clone(), vrt.clone());
+                            let s2v = get_values_from_register(src2, cpu.clone(), vrt.clone());
+                            let s1l = s1v.len();
+                            let s2l = s2v.len();
+                            let _l = s1l + s2l;
+                            let mut v1 = vec![];
+                            for i in 0..s1l {
+                                add_animation_data!(v1; src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1}, i,
+                                    tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                    |_| {});
+                            }
+                            let mut v2 = vec![];
+                            for i in 0..s2l {
+                                let s1v_c = s1v.clone();
+                                let s2v_c = s2v.clone();
+                                add_animation_data!(v2; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, i,
+                                    tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                    move |e| {e.set_string(format!("{} {} {}", s1v_c[i], $calc, s2v_c[i]))});
+                            }
+                            let mut v3 = vec![];
+                            for i in 0..s2l {
+                                add_animation_data!(v3;
+                                    tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
+                                    tgt, LayoutLocation::None, 0, i, |_| {});
+                            }
+                            return vec![(v1, false), (v2, false), (v3, false)];
+                        }
+                    } else if let (Operand::Reg(src1), Operand::Imm(src2)) = (source1.0.clone(), source2.0.clone()) {
+                        if src1.get_type() == RegType::GPR {
+                            let mut v1 = vec![];
+                            add_register_group_animation_data!(v1;
+                                src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1},
+                                tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1},
+                                move |e| {e.set_string(format!("{} {} {}", e.get_value(), $calc, src2))});
+                            let mut v2 = vec![];
+                            add_register_group_animation_data!(v2;
+                                tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1},
+                                tgt, LayoutLocation::None, 0, |_| {});
+                            return vec![(v1, false), (v2, false)];
+                        }
+                    } else if let (Operand::Reg(_src1), Operand::Mem(_src2)) = (source1.0.clone(), source2.0.clone()) {
+                        todo!()
                     }
-                    let mut v2 = vec![];
-                    for i in 0..s2l {
-                        let s1v_c = s1v.clone();
-                        let s2v_c = s2v.clone();
-                        add_animation_data!(v2; src2, source2.1, if source2.1 == LayoutLocation::TOP {source2.2.0} else {source2.2.1}, i,
-                            tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
-                            move |e| {e.set_string(format!("{} + {}", s1v_c[i], s2v_c[i]))});
-                    }
-                    let mut v3 = vec![];
-                    for i in 0..s2l {
-                        add_animation_data!(v3;
-                            tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1}, i,
-                            tgt, LayoutLocation::None, 0, i, |_| {});
-                    }
-                    return vec![(v1, false), (v2, false), (v3, false)];
+                    // Error
+                    vec![(vec![], false)]
                 }
-            } else if let (Operand::Reg(src1), Operand::Imm(src2)) = (source1.0.clone(), source2.0.clone()) {
-                if src1.get_type() == RegType::GPR {
-                    let mut v1 = vec![];
-                    add_register_group_animation_data!(v1;
-                        src1, source1.1, if source1.1 == LayoutLocation::TOP {source1.2.0} else {source1.2.1},
-                        tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1},
-                        move |e| {e.set_string(format!("{} + {}", e.get_value(), src2))});
-                    let mut v2 = vec![];
-                    add_register_group_animation_data!(v2;
-                        tgt, target.1, if target.1 == LayoutLocation::TOP {target.2.0} else {target.2.1},
-                        tgt, LayoutLocation::None, 0, |_| {});
-                    return vec![(v1, false), (v2, false)];
-                }
-            } else if let (Operand::Reg(_src1), Operand::Mem(_src2)) = (source1.0.clone(), source2.0.clone()) {
-                todo!()
+                _ => vec![(vec![], false)],
             }
-            // Error
-            vec![(vec![], false)]
         }
-        _ => vec![(vec![], false)],
-    }
+    };
 }
+
+create_calc_common_animation!(add_common_animation, "+");
+create_calc_common_animation!(mul_common_animation, "*");
 
 fn vaddps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
     if odd.len() != 3 { return vec![(vec![], false)]; }
@@ -558,6 +587,11 @@ fn vaddps_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Ar
 fn vpaddd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
     if odd.len() != 3 { return vec![(vec![], false)]; }
     add_common_animation(cpu, vrt, odd[0].clone(), odd[1].clone(), odd[2].clone())
+}
+
+fn vmulpd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
+    if odd.len() != 3 { return vec![(vec![], false)]; }
+    mul_common_animation(cpu, vrt, odd[0].clone(), odd[1].clone(), odd[2].clone())
 }
 
 fn valignd_animation(odd: Vec<(Operand, LayoutLocation, (usize, usize))>, cpu: Arc<Mutex<CPU>>, vrt: HashMap<(VecRegName, usize), ValueType>) -> Vec<(Vec<ElementAnimationData>, bool)> {
@@ -909,6 +943,7 @@ fn create_instruction_list() -> HashMap<String, (bool, Func, AniFunc)>
     new_instruction!(map; "vperm2f128", false, vperm2f128, vperm2f128_animation);
     new_instruction!(map; "vextractf128", false, vextractf128, vextractf128_animation);
     new_instruction!(map; "shufpd", true, shufpd, shufpd_animation);
+    new_instruction!(map; "vmulpd", false, vmulpd, vmulpd_animation);
     map
 }
 
