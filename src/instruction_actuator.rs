@@ -818,6 +818,7 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
             operands.insert(0, target.clone());
         }
     }
+    // TODO
     // Animation FSM
     // Update CPU data - must run update date
     let cpu_clone = cpu.clone();
@@ -838,14 +839,27 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
     }) && match operands[0] { Operand::Reg(_) => true, _ => false, };
     if !need_animation {
         // if animation is not needed, update cpu and highlight target reg
-        fsm.start();
-        match operands[0] {
-            Operand::Reg(reg) => {
-                let mut rv = rv.lock().unwrap();
-                rv.highlight(&reg);
+        fsm.set_create_layout(|fsm| {
+            fsm.next();
+        });
+        fsm.set_run_animation(|fsm| {
+            fsm.next();
+        });
+        let operands_clone = operands.clone();
+        let rv_clone = rv.clone();
+        let ctx_clone = ctx.clone();
+        fsm.set_destroy_layout(move |fsm| {
+            match operands_clone[0] {
+                Operand::Reg(reg) => {
+                    let mut rv = rv_clone.lock().unwrap();
+                    rv.highlight(&reg);
+                }
+                _ => {}
             }
-            _ => {}
-        }
+            ctx_clone.request_repaint();
+            fsm.next();
+        });
+        fsm.start();
         return;
     }
     // Create location and repeat times for every operands
