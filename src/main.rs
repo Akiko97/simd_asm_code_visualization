@@ -73,6 +73,43 @@ impl Default for APP {
     }
 }
 
+impl APP {
+    fn step(&mut self, ctx: &Context, with_animation: bool) {
+        if self.highlight < self.code.lines().count() {
+            self.highlight += 1;
+            if self.highlight > 0 {
+                let instruction = self.code.lines().collect::<Vec<&str>>()[self.highlight - 1];
+                let s: String = instruction.into();
+                if s.ends_with(":") {
+                    // Do nothing
+                } else if s.starts_with("jne ") {
+                    let cpu = self.cpu.lock().unwrap();
+                    let flag = cpu.registers.get_flags_value(FLAGSName::RFLAGS);
+                    drop(cpu);
+                    let ctrl = (flag >> 6) & 0b1; // Get ZF
+                    if ctrl == 0 {
+                        let parts: Vec<&str> = s.split_whitespace().collect();
+                        if parts.len() == 2 {
+                            let label: String = (*parts.get(1).unwrap()).into();
+                            self.code.lines().enumerate().for_each(|(index, tmp)| {
+                                let mut tmp: String = tmp.into();
+                                tmp.pop();
+                                if label == tmp {
+                                    self.highlight = index + 1;
+                                }
+                            });
+                        }
+                    }
+                } else {
+                    execute(self.register_visualizer.clone(), self.cpu.clone(), &mut self.animation_fsm, &self.reg_visualizer_data, ctx, instruction, with_animation);
+                }
+            }
+        } else {
+            self.highlight = 0;
+        }
+    }
+}
+
 impl App for APP {
     fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         ctx.set_visuals(egui::Visuals::dark()); // Use dark mode
@@ -122,39 +159,11 @@ impl App for APP {
                         self.show_memory = !self.show_memory;
                     }
                     ui.label("Debug Options:");
-                    if ui.button("Step").clicked() {
-                        if self.highlight < self.code.lines().count() {
-                            self.highlight += 1;
-                            if self.highlight > 0 {
-                                let instruction = self.code.lines().collect::<Vec<&str>>()[self.highlight - 1];
-                                let s: String = instruction.into();
-                                if s.ends_with(":") {
-                                    // Do nothing
-                                } else if s.starts_with("jne ") {
-                                    let cpu = self.cpu.lock().unwrap();
-                                    let flag = cpu.registers.get_flags_value(FLAGSName::RFLAGS);
-                                    drop(cpu);
-                                    let ctrl = (flag >> 6) & 0b1; // Get ZF
-                                    if ctrl == 0 {
-                                        let parts: Vec<&str> = s.split_whitespace().collect();
-                                        if parts.len() == 2 {
-                                            let label: String = (*parts.get(1).unwrap()).into();
-                                            self.code.lines().enumerate().for_each(|(index, tmp)| {
-                                                let mut tmp: String = tmp.into();
-                                                tmp.pop();
-                                                if label == tmp {
-                                                    self.highlight = index + 1;
-                                                }
-                                            });
-                                        }
-                                    }
-                                } else {
-                                    execute(self.register_visualizer.clone(), self.cpu.clone(), &mut self.animation_fsm, &self.reg_visualizer_data, ctx, instruction);
-                                }
-                            }
-                        } else {
-                            self.highlight = 0;
-                        }
+                    if ui.button("Step with Animation").clicked() {
+                        self.step(ctx, true);
+                    }
+                    if ui.button("Step without Animation").clicked() {
+                        self.step(ctx, false);
                     }
                     ui.label("DEMO:");
                     if ui.button("Prefix Sum").clicked() {

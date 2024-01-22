@@ -1294,7 +1294,7 @@ lazy_static! {
     };
 }
 
-pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut AnimationFSM, rvd: &RegVisualizerData, ctx: &Context, instruction: &str) {
+pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut AnimationFSM, rvd: &RegVisualizerData, ctx: &Context, instruction: &str, with_animation: bool) {
     // Reset register highlight
     let mut rv_lock = rv.lock().unwrap();
     rv_lock.reset_highlight();
@@ -1353,8 +1353,10 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
     let cpu_clone = cpu.clone();
     let operands_clone = operands.clone();
     let vrt = rvd.vector_regs_type.clone();
+    let ctx_clone = ctx.clone();
     fsm.set_update_data(move |fsm| {
         func(cpu_clone, operands_clone, vrt);
+        ctx_clone.request_repaint();
         fsm.next();
     });
     // Check if need animation - if all register in the display list, show the animation
@@ -1365,7 +1367,7 @@ pub fn execute(rv: Arc<Mutex<RegVisualizer>>, cpu: Arc<Mutex<CPU>>, fsm: &mut An
             }
             _ => true,
         }
-    }) && match operands[0] { Operand::Reg(_) => true, _ => false, };
+    }) && match operands[0] { Operand::Reg(_) => true, _ => false, } && with_animation;
     if !need_animation {
         // if animation is not needed, update cpu and highlight target reg
         fsm.set_create_layout(|fsm| {
