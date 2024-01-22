@@ -146,27 +146,36 @@ impl App for APP {
             });
         });
         if self.show_sidebar {
-            SidePanel::left("side_panel").show(ctx, |ui| {
+            SidePanel::left("side_panel")
+                .default_width(150.0)
+                .min_width(150.0)
+                .max_width(200.0)
+                .show(ctx, |ui| {
                 ui.vertical(|ui| {
                     ui.label("Visualization Options:");
-                    if ui.selectable_label(self.show_settings, "Settings").clicked() {
-                        self.show_settings = !self.show_settings;
-                    }
-                    if ui.selectable_label(self.show_visualizer, "Visualizer").clicked() {
-                        self.show_visualizer = !self.show_visualizer;
-                    }
-                    if ui.selectable_label(self.show_memory, "Memory").clicked() {
-                        self.show_memory = !self.show_memory;
-                    }
+                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::Center), |ui| {
+                        let button_width = ui.available_width();
+
+                        if ui.add_sized([button_width, 0.0], egui::SelectableLabel::new(self.show_settings, "Settings")).clicked() {
+                            self.show_settings = !self.show_settings;
+                        }
+                        if ui.add_sized([button_width, 0.0], egui::SelectableLabel::new(self.show_visualizer, "Visualizer")).clicked() {
+                            self.show_visualizer = !self.show_visualizer;
+                        }
+                        if ui.add_sized([button_width, 0.0], egui::SelectableLabel::new(self.show_memory, "Memory")).clicked() {
+                            self.show_memory = !self.show_memory;
+                        }
+                    });
                     ui.label("Debug Options:");
-                    if ui.button("Step with Animation").clicked() {
+                    let button_width = ui.available_width();
+                    if ui.add_sized([button_width, 0.0], egui::Button::new("Step with Animation")).clicked() {
                         self.step(ctx, true);
                     }
-                    if ui.button("Step without Animation").clicked() {
+                    if ui.add_sized([button_width, 0.0], egui::Button::new("Step without Animation")).clicked() {
                         self.step(ctx, false);
                     }
                     ui.label("DEMO:");
-                    if ui.button("Prefix Sum").clicked() {
+                    if ui.add_sized([button_width, 0.0], egui::Button::new("Prefix Sum")).clicked() {
                         self.code = "valignd zmm1, zmm0, zmm2, 15
 vpaddd zmm0, zmm0, zmm1
 valignd zmm1, zmm0, zmm2, 14
@@ -175,6 +184,7 @@ valignd zmm1, zmm0, zmm2, 12
 vpaddd zmm0, zmm0, zmm1
 valignd zmm1, zmm0, zmm2, 8
 vpaddd zmm0, zmm0, zmm1".into();
+                        self.cpu = Arc::new(Mutex::new(CPU::default()));
                         let mut cpu = self.cpu.lock().unwrap();
                         cpu.registers.set_by_sections::<u32>(VecRegName::ZMM, 0, vec![
                             1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32, 8u32,
@@ -190,7 +200,7 @@ vpaddd zmm0, zmm0, zmm1".into();
                             self.reg_visualizer_data.vector_regs_type.insert((VecRegName::ZMM, i), ValueType::U32);
                         });
                     }
-                    if ui.button("Matrix Transpose").clicked() {
+                    if ui.add_sized([button_width, 0.0], egui::Button::new("Matrix Transpose")).clicked() {
                         self.code = "vunpcklps ymm8, ymm0, ymm1
 vunpcklps ymm9, ymm2, ymm3
 vunpcklps ymm10, ymm4, ymm5
@@ -215,6 +225,7 @@ vperm2f128 ymm12, ymm4, ymm6, 0x20
 vperm2f128 ymm13, ymm5, ymm7, 0x20
 vperm2f128 ymm14, ymm4, ymm6, 0x31
 vperm2f128 ymm15, ymm5, ymm7, 0x31".into();
+                        self.cpu = Arc::new(Mutex::new(CPU::default()));
                         let mut cpu = self.cpu.lock().unwrap();
                         (0u32..16u32).for_each(|i| {
                             let vec = if i < 8 {
@@ -234,7 +245,7 @@ vperm2f128 ymm15, ymm5, ymm7, 0x31".into();
                             self.reg_visualizer_data.vector_regs_type.insert((VecRegName::YMM, i), ValueType::U32);
                         });
                     }
-                    if ui.button("Matrix Multiplication").clicked() {
+                    if ui.add_sized([button_width, 0.0], egui::Button::new("Matrix Multiplication")).clicked() {
                         self.code = "loop:
 vmovapd ymm15, [0x40000000 + rdi]
 vextractf128 xmm14, ymm15, 0
@@ -253,6 +264,7 @@ vmovapd [0x40000080 + rdi], ymm4
 add rdi, 32
 cmp rdi, 128
 jne loop".into();
+                        self.cpu = Arc::new(Mutex::new(CPU::default()));
                         let mut cpu = self.cpu.lock().unwrap();
                         cpu.registers.set_by_sections::<u64>(VecRegName::YMM, 0, Utilities::f64vec_to_u64vec(vec![
                             16f64, 15f64, 14f64, 13f64,
