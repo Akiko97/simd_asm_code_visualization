@@ -34,11 +34,27 @@ impl MemVisualizer {
             ValueType::F64 => {Vec2::new(160.0, 20.0)}
             _ => {Vec2::new(0.0, 0.0)}
         };
+        let mut max_width = 0.0;
+        for row in 0..16 {
+            let addr = self.addr + row * 8;
+            let text = format!("{:X}", addr);
+            let text_width = ui.painter().layout_no_wrap(
+                text.clone(),
+                egui::FontId::new(15.0, egui::FontFamily::Monospace),
+                Color32::BLACK,
+            ).size().x;
+            if text_width > max_width {
+                max_width = text_width;
+            }
+        }
         ui.vertical(|ui| {
-            (0usize..32).for_each(|row| {
+            (0usize..16).for_each(|row| {
                 ui.horizontal(|ui| {
                     let addr = self.addr + row * 8;
-                    ui.label(format!("{:X}", addr));
+                    // ui.label(format!("{:X}", addr));
+                    let text = format!("{:X}", addr);
+                    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(max_width, 20.0), Sense::hover());
+                    ui.painter().text(rect.min, egui::Align2::LEFT_TOP, text, egui::FontId::new(15.0, egui::FontFamily::Monospace), Color32::GRAY);
                     let values = match self.data_type {
                         ValueType::U8 => {create_values(cpu.memory.read_vec::<u8>(addr, 64 / 8))}
                         ValueType::U16 => {create_values(cpu.memory.read_vec::<u16>(addr, 64 / 16))}
@@ -84,10 +100,10 @@ impl MemVisualizer {
         });
         ui.horizontal(|ui| {
             if ui.button("Previous").clicked() {
-                self.addr -= 32 * 8;
+                self.addr -= 16 * 8;
             }
             if ui.button("Next").clicked() {
-                self.addr += 32 * 8;
+                self.addr += 16 * 8;
             }
         });
     }
